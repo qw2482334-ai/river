@@ -1,0 +1,6 @@
+{
+  "name": "开销追踪",
+  "description": "智能记账与理财助手：支持多账本管理、收入支出双轨记录、Gemini AI 语音与智能文本极速记账、分类预算预警、攒钱愿望单以及 CSV 数据导出与本地 Room 持久化备份。",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
