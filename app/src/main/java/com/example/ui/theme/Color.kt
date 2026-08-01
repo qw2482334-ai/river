@@ -2,32 +2,23 @@ package com.example.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
-// Clean Minimalism (Material You Purple / Lavender) Palette
-val PurplePrimary = Color(0xFF6750A4)
-val PurpleOnPrimary = Color(0xFFFFFFFF)
-val PurpleContainer = Color(0xFFEADDFF)
-val PurpleOnContainer = Color(0xFF21005D)
+val ExpensePrimary = Color(0xFF10B981) // Emerald Primary
+val ExpenseSecondary = Color(0xFF3B82F6) // Sapphire Blue
+val ExpenseTertiary = Color(0xFF8B5CF6) // Amethyst Violet
 
-val MinimalBackground = Color(0xFFFEF7FF)
-val MinimalSurface = Color(0xFFFFFFFF)
-val MinimalSurfaceVariant = Color(0xFFF3EDF7)
-val MinimalSurfaceContainer = Color(0xFFE8DEF8)
+val ExpenseRed = Color(0xFFEF4444) // Coral Red for Expenses
+val IncomeGreen = Color(0xFF10B981) // Emerald Green for Income
 
-val TextMain = Color(0xFF1D1B20)
-val TextMuted = Color(0xFF49454F)
+val LightBackground = Color(0xFFF8FAFC)
+val LightSurface = Color(0xFFFFFFFF)
+val LightSurfaceVariant = Color(0xFFF1F5F9)
 
-// Category Accent Colors
-val ColorFood = Color(0xFFFFD8E4)
-val ColorTransport = Color(0xFFD0BCFF)
-val ColorEntertainment = Color(0xFFC2E7FF)
-val ColorShopping = Color(0xFFE8DEF8)
-val ColorHousing = Color(0xFFB6F2D4)
-val ColorMedical = Color(0xFFFFD6A5)
-val ColorEducation = Color(0xFFFDFFB6)
-val ColorOther = Color(0xFFE2E8F0)
+val DarkBackground = Color(0xFF0F172A)
+val DarkSurface = Color(0xFF1E293B)
+val DarkSurfaceVariant = Color(0xFF334155)
 
-// Dark Theme Variants
-val DarkBackground = Color(0xFF141218)
-val DarkSurface = Color(0xFF211F26)
-val DarkSurfaceVariant = Color(0xFF49454F)
-val DarkPurplePrimary = Color(0xFFD0BCFF)
+val TextPrimaryLight = Color(0xFF0F172A)
+val TextSecondaryLight = Color(0xFF64748B)
+
+val TextPrimaryDark = Color(0xFFF8FAFC)
+val TextSecondaryDark = Color(0xFF94A3B8)

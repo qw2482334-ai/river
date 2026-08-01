@@ -1,74 +1,187 @@
 package com.example.ui.components
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.os.Build
+import android.util.Base64
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.activity.result.launch
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Mic
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.material.icons.filled.PhotoLibrary
+import androidx.compose.material.icons.filled.Stop
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import androidx.core.content.ContextCompat
+import com.example.data.ExpenseEntity
 import com.example.data.ParsedExpense
+import java.io.ByteArrayOutputStream
 
 @Composable
 fun SmartAiAddDialog(
-    isAiLoading: Boolean,
-    onParseText: (String, (ParsedExpense) -> Unit) -> Unit,
-    onParseReceiptImage: (String, (ParsedExpense) -> Unit) -> Unit,
-    onConfirmExpense: (ParsedExpense) -> Unit,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    onParseText: (String) -> Unit,
+    onParseImage: (String, String) -> Unit,
+    onConfirmAdd: (ExpenseEntity) -> Unit,
+    isParsing: Boolean,
+    parsedResult: ParsedExpense?,
+    errorMessage: String?
 ) {
+    val context = LocalContext.current
     var inputText by remember { mutableStateOf("") }
-    var parsedExpenseResult by remember { mutableStateOf<ParsedExpense?>(null) }
+    var localPermissionError by remember { mutableStateOf<String?>(null) }
 
-    // Sample Base64 image placeholder for receipt OCR demo
-    val sampleReceiptBase64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
+    val speechHelper = remember { SpeechToTextHelper(context) }
+    val isListening by speechHelper.isListening
+    val recognizedText by speechHelper.recognizedText
+    val speechError by speechHelper.errorState
 
-    val presetPromptExamples = listOf(
-        "昨天晚上跟同事吃海底捞花了280元",
-        "今天公司发工资12000元",
-        "打车去机场花了85块钱",
-        "网购买服饰花费199元"
-    )
+    // 1. Photo Gallery Picker for Receipt OCR
+    val galleryPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri ->
+        uri?.let {
+            try {
+                localPermissionError = null
+                val inputStream = context.contentResolver.openInputStream(it)
+                val bytes = inputStream?.readBytes()
+                if (bytes != null) {
+                    val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+                    val outputStream = ByteArrayOutputStream()
+                    bitmap.compress(Bitmap.CompressFormat.JPEG, 80, outputStream)
+                    val base64 = Base64.encodeToString(outputStream.toByteArray(), Base64.NO_WRAP)
+                    onParseImage(base64, "image/jpeg")
+                }
+            } catch (e: Exception) {
+                localPermissionError = "读取选中的图片失败：${e.localizedMessage}"
+            }
+        }
+    }
 
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = {
-            Row(verticalAlignment = Alignment.CenterVertically) {
+    // 2. Camera Photo Launcher for Receipt OCR
+    val cameraLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.TakePicturePreview()
+    ) { bitmap: Bitmap? ->
+        if (bitmap != null) {
+            try {
+                localPermissionError = null
+                val outputStream = ByteArrayOutputStream()
+                bitmap.compress(Bitmap.CompressFormat.JPEG, 80, outputStream)
+                val base64 = Base64.encodeToString(outputStream.toByteArray(), Base64.NO_WRAP)
+                onParseImage(base64, "image/jpeg")
+            } catch (e: Exception) {
+                localPermissionError = "处理拍照图片失败：${e.localizedMessage}"
+            }
+        }
+    }
+
+    DisposableEffect(Unit) {
+        onDispose {
+            speechHelper.stopAndDestroy()
+        }
+    }
+
+    // Permission Launchers
+    val audioPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        if (isGranted) {
+            localPermissionError = null
+            speechHelper.startListening { spoken ->
+                inputText = spoken
+                onParseText(spoken)
+            }
+        } else {
+            localPermissionError = "未授予麦克风录音权限，无法使用语音输入功能"
+        }
+    }
+
+    val cameraPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        if (isGranted) {
+            localPermissionError = null
+            cameraLauncher.launch()
+        } else {
+            localPermissionError = "未授予相机拍照权限，无法拍摄发票"
+        }
+    }
+
+    fun startVoiceRecording() {
+        val hasPermission = ContextCompat.checkSelfPermission(
+            context,
+            Manifest.permission.RECORD_AUDIO
+        ) == PackageManager.PERMISSION_GRANTED
+
+        if (hasPermission) {
+            localPermissionError = null
+            speechHelper.startListening { spoken ->
+                inputText = spoken
+                onParseText(spoken)
+            }
+        } else {
+            audioPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+        }
+    }
+
+    fun openCamera() {
+        val hasPermission = ContextCompat.checkSelfPermission(
+            context,
+            Manifest.permission.CAMERA
+        ) == PackageManager.PERMISSION_GRANTED
+
+        if (hasPermission) {
+            localPermissionError = null
+            cameraLauncher.launch()
+        } else {
+            cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
+        }
+    }
+
+    fun openGallery() {
+        localPermissionError = null
+        galleryPickerLauncher.launch("image/*")
+    }
+
+    Dialog(onDismissRequest = {
+        speechHelper.stopAndDestroy()
+        onDismiss()
+    }) {
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp)
+                .testTag("smart_ai_add_dialog"),
+            shape = RoundedCornerShape(24.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+        ) {
+            Column(
+                modifier = Modifier.padding(20.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
                 Box(
                     modifier = Modifier
-                        .size(36.dp)
-                        .clip(CircleShape)
+                        .size(48.dp)
+                        .clip(RoundedCornerShape(12.dp))
                         .background(MaterialTheme.colorScheme.primaryContainer),
                     contentAlignment = Alignment.Center
                 ) {
@@ -76,163 +189,245 @@ fun SmartAiAddDialog(
                         imageVector = Icons.Default.AutoAwesome,
                         contentDescription = null,
                         tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(20.dp)
+                        modifier = Modifier.size(28.dp)
                     )
                 }
-                Spacer(modifier = Modifier.width(10.dp))
-                Column {
-                    Text("AI 智能极速记账", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold))
-                    Text("说出或粘贴一句话，自动识别提取", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-            }
-        },
-        text = {
-            Column {
-                OutlinedTextField(
-                    value = inputText,
-                    onValueChange = {
-                        inputText = it
-                        parsedExpenseResult = null
-                    },
-                    placeholder = { Text("例如：昨天中午吃火锅花了260元...") },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(16.dp),
-                    trailingIcon = {
-                        IconButton(onClick = {
-                            if (inputText.isBlank()) {
-                                inputText = presetPromptExamples.random()
-                            }
-                        }) {
-                            Icon(
-                                imageVector = Icons.Default.Mic,
-                                contentDescription = "示例/语音输入",
-                                tint = MaterialTheme.colorScheme.primary
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Text(
+                    text = "Gemini 语音与语义极速记账",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold
+                )
+
+                Text(
+                    text = "说出或输入任意账单，AI 自动拆解金额与分类",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // Listening Status Banner
+                if (isListening) {
+                    Surface(
+                        color = MaterialTheme.colorScheme.tertiaryContainer,
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(20.dp),
+                                color = MaterialTheme.colorScheme.onTertiaryContainer,
+                                strokeWidth = 2.dp
+                            )
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Text(
+                                text = recognizedText.ifBlank { "正在聆听，请清晰说出您的账单..." },
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onTertiaryContainer
                             )
                         }
                     }
+                    Spacer(modifier = Modifier.height(12.dp))
+                }
+
+                OutlinedTextField(
+                    value = inputText,
+                    onValueChange = { inputText = it },
+                    placeholder = { Text("例如：打车去机场花了128元；收到稿费800元") },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(100.dp)
+                        .testTag("ai_input_field"),
+                    maxLines = 4
                 )
 
-                Spacer(modifier = Modifier.height(10.dp))
+                Spacer(modifier = Modifier.height(12.dp))
 
-                Text(
-                    text = "💡 试一试快速输入例句：",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Spacer(modifier = Modifier.height(6.dp))
-
+                // Action Bar with Mic Recording, Camera Photo, and Gallery OCR Buttons
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    presetPromptExamples.take(2).forEach { example ->
-                        TextButton(
-                            onClick = {
-                                inputText = example
-                                parsedExpenseResult = null
-                            },
-                            modifier = Modifier
-                                .weight(1f)
-                                .clip(RoundedCornerShape(12.dp))
-                                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                    FilledTonalButton(
+                        onClick = {
+                            if (isListening) {
+                                speechHelper.stopListening()
+                            } else {
+                                startVoiceRecording()
+                            }
+                        },
+                        shape = CircleShape,
+                        colors = if (isListening) ButtonDefaults.filledTonalButtonColors(
+                            containerColor = MaterialTheme.colorScheme.errorContainer,
+                            contentColor = MaterialTheme.colorScheme.onErrorContainer
+                        ) else ButtonDefaults.filledTonalButtonColors(),
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Icon(
+                            imageVector = if (isListening) Icons.Default.Stop else Icons.Default.Mic,
+                            contentDescription = "语音记账",
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(2.dp))
+                        Text(if (isListening) "停止" else "语音", style = MaterialTheme.typography.labelMedium)
+                    }
+
+                    OutlinedButton(
+                        onClick = { openCamera() },
+                        shape = CircleShape,
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp),
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.CameraAlt,
+                            contentDescription = "拍照发票",
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(2.dp))
+                        Text("拍照", style = MaterialTheme.typography.labelMedium)
+                    }
+
+                    OutlinedButton(
+                        onClick = { openGallery() },
+                        shape = CircleShape,
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp),
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.PhotoLibrary,
+                            contentDescription = "相册发票",
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(2.dp))
+                        Text("相册", style = MaterialTheme.typography.labelMedium)
+                    }
+
+                    Button(
+                        onClick = { if (inputText.isNotBlank()) onParseText(inputText) },
+                        enabled = !isParsing && inputText.isNotBlank(),
+                        shape = RoundedCornerShape(12.dp),
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
+                        modifier = Modifier.weight(1.1f)
+                    ) {
+                        if (isParsing) {
+                            CircularProgressIndicator(modifier = Modifier.size(16.dp), color = MaterialTheme.colorScheme.onPrimary, strokeWidth = 2.dp)
+                        } else {
+                            Icon(imageVector = Icons.Default.AutoAwesome, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(2.dp))
+                            Text("解析", style = MaterialTheme.typography.labelMedium)
+                        }
+                    }
+                }
+
+                // Parsing Loading Banner
+                if (isParsing) {
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Surface(
+                        color = MaterialTheme.colorScheme.primaryContainer,
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text(example, fontSize = 11.sp, maxLines = 1)
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(20.dp),
+                                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                strokeWidth = 2.dp
+                            )
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Text(
+                                text = "Gemini AI 正在智能分析拆解文本/发票数据...",
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer
+                            )
                         }
                     }
                 }
 
-                Spacer(modifier = Modifier.height(10.dp))
-
-                androidx.compose.material3.OutlinedButton(
-                    onClick = {
-                        onParseReceiptImage(sampleReceiptBase64) { parsed ->
-                            parsedExpenseResult = parsed
-                        }
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp),
-                    enabled = !isAiLoading
-                ) {
-                    Text("📷 识别小票/账单图片（Gemini Vision 多模态）", fontSize = 12.sp)
+                val combinedError = localPermissionError ?: errorMessage ?: speechError
+                if (combinedError != null) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Surface(
+                        color = MaterialTheme.colorScheme.errorContainer,
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            text = "⚠️ $combinedError",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onErrorContainer,
+                            modifier = Modifier.padding(10.dp)
+                        )
+                    }
                 }
 
-                if (isAiLoading) {
+                // Parsed Preview Card
+                if (parsedResult != null) {
                     Spacer(modifier = Modifier.height(16.dp))
-                    Row(
+
+                    Card(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.Center,
-                        verticalAlignment = Alignment.CenterVertically
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
                     ) {
-                        CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
-                        Spacer(modifier = Modifier.width(10.dp))
-                        Text("Gemini AI 正在智能解析语义...", style = MaterialTheme.typography.bodyMedium)
+                        Column(modifier = Modifier.padding(14.dp)) {
+                            Text(text = "✨ AI 解析结果：", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Text(text = "项目：${parsedResult.title}", style = MaterialTheme.typography.bodyMedium)
+                            Text(text = "金额：￥${parsedResult.amount}", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+                            Text(text = "类型：${if (parsedResult.type == "INCOME") "收入 ↙" else "支出 ↗"}", style = MaterialTheme.typography.bodyMedium)
+                            Text(text = "分类：${parsedResult.category}", style = MaterialTheme.typography.bodyMedium)
+                            if (parsedResult.note.isNotBlank()) {
+                                Text(text = "备注：${parsedResult.note}", style = MaterialTheme.typography.labelMedium)
+                            }
+
+                            Spacer(modifier = Modifier.height(12.dp))
+
+                            Button(
+                                onClick = {
+                                    onConfirmAdd(
+                                        ExpenseEntity(
+                                            title = parsedResult.title.ifBlank { parsedResult.category },
+                                            amount = parsedResult.amount,
+                                            type = parsedResult.type,
+                                            category = parsedResult.category,
+                                            note = parsedResult.note
+                                        )
+                                    )
+                                    speechHelper.stopAndDestroy()
+                                    onDismiss()
+                                },
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(10.dp)
+                                ) {
+                                Icon(imageVector = Icons.Default.Check, contentDescription = null)
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("确认入账")
+                            }
+                        }
                     }
                 }
 
-                parsedExpenseResult?.let { parsed ->
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(16.dp))
-                            .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f))
-                            .padding(14.dp)
-                    ) {
-                        Column {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween
-                            ) {
-                                Text("✅ 识别结果确认", style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold), color = MaterialTheme.colorScheme.primary)
-                                Text(parsed.type, style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold), color = if (parsed.type == "收入") Color(0xFF047857) else Color(0xFFB91C1C))
-                            }
-                            Spacer(modifier = Modifier.height(6.dp))
-                            Text("• 金额: ￥${parsed.amount}", style = MaterialTheme.typography.bodyMedium)
-                            Text("• 类别: ${parsed.category}", style = MaterialTheme.typography.bodyMedium)
-                            Text("• 日期: ${parsed.date}", style = MaterialTheme.typography.bodyMedium)
-                            Text("• 备注: ${parsed.note}", style = MaterialTheme.typography.bodyMedium)
-                        }
-                    }
+                Spacer(modifier = Modifier.height(12.dp))
+
+                TextButton(onClick = {
+                    speechHelper.stopAndDestroy()
+                    onDismiss()
+                }) {
+                    Text("取消", color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
-            }
-        },
-        confirmButton = {
-            if (parsedExpenseResult != null) {
-                Button(
-                    onClick = {
-                        parsedExpenseResult?.let {
-                            onConfirmExpense(it)
-                            onDismiss()
-                        }
-                    },
-                    shape = RoundedCornerShape(12.dp)
-                ) {
-                    Icon(imageVector = Icons.Default.Check, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text("确认添加该笔账目")
-                }
-            } else {
-                Button(
-                    onClick = {
-                        if (inputText.isNotBlank()) {
-                            onParseText(inputText) { parsed ->
-                                parsedExpenseResult = parsed
-                            }
-                        }
-                    },
-                    enabled = inputText.isNotBlank() && !isAiLoading,
-                    shape = RoundedCornerShape(12.dp)
-                ) {
-                    Icon(imageVector = Icons.Default.AutoAwesome, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text("AI 识别提取")
-                }
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("取消")
             }
         }
-    )
+    }
 }

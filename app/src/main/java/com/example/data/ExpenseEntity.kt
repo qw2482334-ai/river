@@ -3,15 +3,21 @@ package com.example.data
 import androidx.room.Entity
 import androidx.room.PrimaryKey
 
+enum class TransactionType {
+    EXPENSE,
+    INCOME
+}
+
 @Entity(tableName = "expenses")
 data class ExpenseEntity(
     @PrimaryKey(autoGenerate = true)
-    val id: Int = 0,
+    val id: Long = 0,
+    val title: String,
     val amount: Double,
+    val type: String = TransactionType.EXPENSE.name,
     val category: String,
-    val date: String,
-    val timestamp: Long = System.currentTimeMillis(),
+    val ledgerName: String = "日常账本",
+    val dateMillis: Long = System.currentTimeMillis(),
     val note: String = "",
-    val type: String = "支出", // "支出" or "收入"
-    val ledger: String = "日常账本" // "日常账本", "家庭账本", "旅行出差", "工作报销"
+    val isRecurring: Boolean = false
 )

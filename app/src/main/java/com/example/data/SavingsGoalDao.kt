@@ -10,14 +10,11 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface SavingsGoalDao {
-    @Query("SELECT * FROM savings_goals ORDER BY id DESC")
+    @Query("SELECT * FROM savings_goals ORDER BY targetDateMillis ASC")
     fun getAllGoals(): Flow<List<SavingsGoalEntity>>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertGoal(goal: SavingsGoalEntity): Long
-
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insertGoals(goals: List<SavingsGoalEntity>)
 
     @Update
     suspend fun updateGoal(goal: SavingsGoalEntity)
@@ -25,6 +22,6 @@ interface SavingsGoalDao {
     @Delete
     suspend fun deleteGoal(goal: SavingsGoalEntity)
 
-    @Query("SELECT COUNT(*) FROM savings_goals")
-    suspend fun getGoalCount(): Int
+    @Query("DELETE FROM savings_goals WHERE id = :id")
+    suspend fun deleteGoalById(id: Long)
 }

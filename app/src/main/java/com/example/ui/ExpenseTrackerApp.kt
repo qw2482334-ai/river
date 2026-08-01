@@ -1,643 +1,888 @@
 package com.example.ui
 
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Analytics
-import androidx.compose.material.icons.filled.AutoAwesome
-import androidx.compose.material.icons.filled.Download
-import androidx.compose.material.icons.filled.ListAlt
-import androidx.compose.material.icons.filled.Psychology
-import androidx.compose.material.icons.filled.ReceiptLong
-import androidx.compose.material.icons.filled.Savings
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ExtendedFloatingActionButton
-import androidx.compose.material3.FloatingActionButton
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Tab
-import androidx.compose.material3.TabRow
-import androidx.compose.material3.TabRowDefaults
-import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
-import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
-import androidx.compose.material3.rememberModalBottomSheetState
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.example.ui.components.AddExpenseBottomSheet
-import com.example.ui.components.AiAdvisorChatCard
-import com.example.ui.components.AiConfigDialog
-import com.example.ui.components.AiFinancialReportDialog
-import com.example.ui.components.AiInsightsCard
-import com.example.ui.components.BudgetOverviewCard
-import com.example.ui.components.CategoryBudgetCard
-import com.example.ui.components.ExpenseItemCard
-import com.example.ui.components.ExportDataBottomSheet
-import com.example.ui.components.LedgerSelectorBar
-import com.example.ui.components.MonthPicker
-import com.example.ui.components.MonthlyChartCard
-import com.example.ui.components.RecurringBillsCard
-import com.example.ui.components.SavingsGoalCard
-import com.example.ui.components.SearchBarAndFilter
-import com.example.ui.components.SmartAiAddDialog
-import kotlinx.coroutines.launch
+import com.example.data.ExpenseCategory
+import com.example.data.ExpenseEntity
+import com.example.data.SavingsGoalEntity
+import com.example.data.TransactionType
+import com.example.ui.components.*
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ExpenseTrackerApp(
-    viewModel: ExpenseViewModel,
-    modifier: Modifier = Modifier
+    viewModel: ExpenseViewModel = androidx.lifecycle.viewmodel.compose.viewModel()
 ) {
-    val selectedMonth by viewModel.selectedMonth.collectAsStateWithLifecycle()
     val selectedLedger by viewModel.selectedLedger.collectAsStateWithLifecycle()
-    val selectedTypeFilter by viewModel.selectedTypeFilter.collectAsStateWithLifecycle()
-    val summary by viewModel.monthlySummary.collectAsStateWithLifecycle()
-    val filteredExpenses by viewModel.filteredExpenses.collectAsStateWithLifecycle()
+    val allExpenses by viewModel.allExpenses.collectAsStateWithLifecycle()
+    val allGoals by viewModel.allGoals.collectAsStateWithLifecycle()
     val searchQuery by viewModel.searchQuery.collectAsStateWithLifecycle()
-    val selectedCategoryFilter by viewModel.selectedCategoryFilter.collectAsStateWithLifecycle()
-    val savingsGoals by viewModel.savingsGoals.collectAsStateWithLifecycle()
-    val aiInsights by viewModel.aiInsights.collectAsStateWithLifecycle()
-    val isAiLoading by viewModel.isAiLoading.collectAsStateWithLifecycle()
+    val categoryFilter by viewModel.categoryFilter.collectAsStateWithLifecycle()
+    val typeFilter by viewModel.typeFilter.collectAsStateWithLifecycle()
+    val monthlyBudget by viewModel.monthlyBudget.collectAsStateWithLifecycle()
+    val categoryBudgets by viewModel.categoryBudgets.collectAsStateWithLifecycle()
+    val exchangeRates by viewModel.exchangeRates.collectAsStateWithLifecycle()
+    val isLoadingRates by viewModel.isLoadingRates.collectAsStateWithLifecycle()
+    val onlineInsightText by viewModel.onlineInsightText.collectAsStateWithLifecycle()
+    val isGeneratingInsight by viewModel.isGeneratingInsight.collectAsStateWithLifecycle()
+    val investments by viewModel.investments.collectAsStateWithLifecycle()
+    val isLoadingMarket by viewModel.isLoadingMarket.collectAsStateWithLifecycle()
+    val lotteryRecords by viewModel.lotteryRecords.collectAsStateWithLifecycle()
+    val activeTab by viewModel.activeTab.collectAsStateWithLifecycle()
+
+    val isParsingAi by viewModel.isParsingAi.collectAsStateWithLifecycle()
+    val parsedExpenseResult by viewModel.parsedExpenseResult.collectAsStateWithLifecycle()
+    val aiErrorMessage by viewModel.aiErrorMessage.collectAsStateWithLifecycle()
+
     val chatMessages by viewModel.chatMessages.collectAsStateWithLifecycle()
-    val financialReport by viewModel.financialReport.collectAsStateWithLifecycle()
+    val isAiThinking by viewModel.isAiThinking.collectAsStateWithLifecycle()
+
+    val monthlyReport by viewModel.monthlyReport.collectAsStateWithLifecycle()
     val isReportLoading by viewModel.isReportLoading.collectAsStateWithLifecycle()
-    val reasoningPlan by viewModel.reasoningPlan.collectAsStateWithLifecycle()
-    val isReasoningLoading by viewModel.isReasoningLoading.collectAsStateWithLifecycle()
 
-    val aiConfig by viewModel.aiConfig.collectAsStateWithLifecycle()
-    val recurringBills by viewModel.recurringBills.collectAsStateWithLifecycle()
+    val snackbarHostState = remember { SnackbarHostState() }
 
-    var selectedTab by remember { mutableIntStateOf(0) } // 0: Overview, 1: Savings Wishlist, 2: Transactions, 3: AI Advisor
-    var showAddBottomSheet by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        viewModel.snackbarEvent.collect { message ->
+            snackbarHostState.showSnackbar(
+                message = message,
+                duration = SnackbarDuration.Short
+            )
+        }
+    }
+
+    // Dialog state toggles
+    var showAddExpenseSheet by remember { mutableStateOf(false) }
     var showSmartAiDialog by remember { mutableStateOf(false) }
     var showExportSheet by remember { mutableStateOf(false) }
-    var showAiConfigDialog by remember { mutableStateOf(false) }
+    var showSetBudgetDialog by remember { mutableStateOf(false) }
+    var showAddGoalDialog by remember { mutableStateOf(false) }
+    var showAiSettingsDialog by remember { mutableStateOf(false) }
 
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    val scope = rememberCoroutineScope()
+    var selectedGoalForDeposit by remember { mutableStateOf<SavingsGoalEntity?>(null) }
+
+    // Filtered Expenses
+    val filteredExpenses = remember(allExpenses, searchQuery, categoryFilter, typeFilter) {
+        allExpenses.filter { exp ->
+            val matchQuery = searchQuery.isBlank() ||
+                    exp.title.contains(searchQuery, ignoreCase = true) ||
+                    exp.note.contains(searchQuery, ignoreCase = true) ||
+                    exp.category.contains(searchQuery, ignoreCase = true)
+            val matchCat = categoryFilter == null || exp.category == categoryFilter
+            val matchType = typeFilter == null || exp.type == typeFilter
+            matchQuery && matchCat && matchType
+        }
+    }
+
+    val totalIncome = remember(filteredExpenses) {
+        filteredExpenses.filter { it.type == TransactionType.INCOME.name }.sumOf { it.amount }
+    }
+    val totalExpense = remember(filteredExpenses) {
+        filteredExpenses.filter { it.type == TransactionType.EXPENSE.name }.sumOf { it.amount }
+    }
 
     Scaffold(
-        modifier = modifier.fillMaxSize(),
-        containerColor = MaterialTheme.colorScheme.background,
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(MaterialTheme.colorScheme.surface)
-            ) {
-                TopAppBar(
-                    title = {
-                        Column {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text(
-                                    text = "$selectedLedger • $selectedMonth",
-                                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                                Spacer(modifier = Modifier.width(6.dp))
-                                // Active Provider Badge
-                                Surface(
-                                    onClick = { showAiConfigDialog = true },
-                                    color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f),
-                                    shape = RoundedCornerShape(8.dp)
-                                ) {
-                                    Text(
-                                        text = aiConfig.providerType.displayName.split(" ").firstOrNull() ?: "AI",
-                                        style = MaterialTheme.typography.labelSmall,
-                                        fontSize = 10.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = MaterialTheme.colorScheme.primary,
-                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                                    )
-                                }
-                            }
-                            Text(
-                                text = "智能随手记账",
-                                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                        }
-                    },
-                    actions = {
-                        // AI Model Config Button
-                        IconButton(onClick = { showAiConfigDialog = true }) {
-                            Icon(
-                                imageVector = Icons.Default.Settings,
-                                contentDescription = "大模型 & 国内 API 配置",
-                                tint = MaterialTheme.colorScheme.primary
-                            )
-                        }
-
-                        // Export Data Button
-                        IconButton(onClick = { showExportSheet = true }) {
-                            Icon(
-                                imageVector = Icons.Default.Download,
-                                contentDescription = "导出账单",
-                                tint = MaterialTheme.colorScheme.primary
-                            )
-                        }
-
-                        // Smart AI Button
-                        IconButton(onClick = { showSmartAiDialog = true }) {
-                            Icon(
-                                imageVector = Icons.Default.AutoAwesome,
-                                contentDescription = "AI 语音记账",
-                                tint = MaterialTheme.colorScheme.primary
-                            )
-                        }
-                    },
-                    colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = MaterialTheme.colorScheme.surface
-                    )
-                )
-
-                // Multi-Ledger Selection Chips
-                LedgerSelectorBar(
-                    availableLedgers = viewModel.availableLedgers,
-                    selectedLedger = selectedLedger,
-                    onLedgerSelected = { viewModel.setSelectedLedger(it) }
-                )
-
-                // Month Picker
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 2.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    MonthPicker(
-                        selectedMonth = selectedMonth,
-                        onMonthSelected = { viewModel.setSelectedMonth(it) }
-                    )
-                }
-
-                Spacer(modifier = Modifier.height(4.dp))
-
-                // Navigation Tabs
-                TabRow(
-                    selectedTabIndex = selectedTab,
-                    containerColor = MaterialTheme.colorScheme.surface,
-                    contentColor = MaterialTheme.colorScheme.primary,
-                    indicator = { tabPositions ->
-                        TabRowDefaults.SecondaryIndicator(
-                            modifier = Modifier.tabIndicatorOffset(tabPositions[selectedTab]),
-                            color = MaterialTheme.colorScheme.primary,
-                            height = 3.dp
+            CenterAlignedTopAppBar(
+                title = {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Default.AccountBalanceWallet,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(24.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "开销追踪",
+                            fontWeight = FontWeight.Bold,
+                            style = MaterialTheme.typography.titleLarge
                         )
                     }
-                ) {
-                    Tab(
-                        selected = selectedTab == 0,
-                        onClick = { selectedTab = 0 },
-                        text = {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(imageVector = Icons.Default.Analytics, contentDescription = null, modifier = Modifier.size(16.dp))
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text("图表分析", fontWeight = if (selectedTab == 0) FontWeight.Bold else FontWeight.Normal)
-                            }
-                        }
-                    )
+                },
+                actions = {
+                    // AI Smart Quick Voice/Text Logging Button
+                    IconButton(
+                        onClick = { showSmartAiDialog = true },
+                        modifier = Modifier.testTag("ai_smart_add_icon_button")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.AutoAwesome,
+                            contentDescription = "AI 语音极速记账",
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    }
 
-                    Tab(
-                        selected = selectedTab == 1,
-                        onClick = { selectedTab = 1 },
-                        text = {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(imageVector = Icons.Default.Savings, contentDescription = null, modifier = Modifier.size(16.dp))
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text("攒钱愿望", fontWeight = if (selectedTab == 1) FontWeight.Bold else FontWeight.Normal)
-                            }
+                    // Monthly AI Financial Report Button
+                    IconButton(
+                        onClick = {
+                            viewModel.generateMonthlyReport()
                         }
-                    )
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Assessment,
+                            contentDescription = "AI 财务报告",
+                            tint = MaterialTheme.colorScheme.tertiary
+                        )
+                    }
 
-                    Tab(
-                        selected = selectedTab == 2,
-                        onClick = { selectedTab = 2 },
-                        text = {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(imageVector = Icons.Default.ReceiptLong, contentDescription = null, modifier = Modifier.size(16.dp))
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text("明细 (${summary.totalRecords})", fontWeight = if (selectedTab == 2) FontWeight.Bold else FontWeight.Normal)
-                            }
-                        }
-                    )
+                    // Export CSV Data
+                    IconButton(
+                        onClick = { showExportSheet = true }
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.FileDownload,
+                            contentDescription = "导出账单",
+                            tint = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
 
-                    Tab(
-                        selected = selectedTab == 3,
-                        onClick = { selectedTab = 3 },
-                        text = {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(imageVector = Icons.Default.AutoAwesome, contentDescription = null, modifier = Modifier.size(16.dp))
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text("AI 顾问", fontWeight = if (selectedTab == 3) FontWeight.Bold else FontWeight.Normal)
-                            }
-                        }
-                    )
+                    // AI Engine & Network Settings
+                    IconButton(
+                        onClick = { showAiSettingsDialog = true }
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Settings,
+                            contentDescription = "AI 网络配置",
+                            tint = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
                 }
+            )
+        },
+        bottomBar = {
+            NavigationBar {
+                NavigationBarItem(
+                    selected = activeTab == 0,
+                    onClick = { viewModel.setActiveTab(0) },
+                    icon = { Icon(Icons.Default.ReceiptLong, contentDescription = null) },
+                    label = { Text("明细") },
+                    modifier = Modifier.testTag("nav_tab_details")
+                )
+                NavigationBarItem(
+                    selected = activeTab == 1,
+                    onClick = { viewModel.setActiveTab(1) },
+                    icon = { Icon(Icons.Default.ShowChart, contentDescription = null) },
+                    label = { Text("理财/足彩") },
+                    modifier = Modifier.testTag("nav_tab_investments")
+                )
+                NavigationBarItem(
+                    selected = activeTab == 2,
+                    onClick = { viewModel.setActiveTab(2) },
+                    icon = { Icon(Icons.Default.PieChart, contentDescription = null) },
+                    label = { Text("图表预算") },
+                    modifier = Modifier.testTag("nav_tab_charts")
+                )
+                NavigationBarItem(
+                    selected = activeTab == 3,
+                    onClick = { viewModel.setActiveTab(3) },
+                    icon = { Icon(Icons.Default.Savings, contentDescription = null) },
+                    label = { Text("攒钱心愿") },
+                    modifier = Modifier.testTag("nav_tab_goals")
+                )
+                NavigationBarItem(
+                    selected = activeTab == 4,
+                    onClick = { viewModel.setActiveTab(4) },
+                    icon = { Icon(Icons.Default.AutoAwesome, contentDescription = null) },
+                    label = { Text("AI 智算") },
+                    modifier = Modifier.testTag("nav_tab_advisor")
+                )
             }
         },
         floatingActionButton = {
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-                verticalAlignment = Alignment.CenterVertically
+            Column(
+                horizontalAlignment = Alignment.End,
+                verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                FloatingActionButton(
+                SmallFloatingActionButton(
                     onClick = { showSmartAiDialog = true },
-                    containerColor = MaterialTheme.colorScheme.primaryContainer,
-                    contentColor = MaterialTheme.colorScheme.primary,
-                    shape = CircleShape
+                    shape = CircleShape,
+                    containerColor = MaterialTheme.colorScheme.tertiaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
+                    modifier = Modifier.testTag("ai_voice_quick_fab")
                 ) {
-                    Icon(imageVector = Icons.Default.AutoAwesome, contentDescription = "AI极速记账")
+                    Icon(imageVector = Icons.Default.Mic, contentDescription = "AI 语音极速记账")
                 }
 
-                ExtendedFloatingActionButton(
-                    onClick = { showAddBottomSheet = true },
-                    icon = { Icon(Icons.Default.Add, contentDescription = null) },
-                    text = { Text("记一笔", fontWeight = FontWeight.Bold) },
+                FloatingActionButton(
+                    onClick = { showAddExpenseSheet = true },
+                    shape = CircleShape,
                     containerColor = MaterialTheme.colorScheme.primary,
-                    contentColor = Color.White,
-                    shape = RoundedCornerShape(20.dp)
-                )
+                    contentColor = MaterialTheme.colorScheme.onPrimary,
+                    modifier = Modifier.testTag("add_expense_fab")
+                ) {
+                    Icon(imageVector = Icons.Default.Add, contentDescription = "手动记一笔")
+                }
             }
         }
     ) { innerPadding ->
-        Box(
+        Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
         ) {
-            when (selectedTab) {
-                0 -> OverviewTabContent(
-                    summary = summary,
-                    aiInsights = aiInsights,
-                    isAiLoading = isAiLoading,
-                    chatMessages = chatMessages,
-                    recurringBills = recurringBills,
-                    onAddRecurringBill = { viewModel.addRecurringBill(it) },
-                    onDeleteRecurringBill = { viewModel.deleteRecurringBill(it) },
-                    onSendMessage = { viewModel.sendChatMessage(it) },
-                    onRefreshInsights = { viewModel.refreshAiInsights() },
-                    onGenerateReport = { viewModel.generateFinancialReport() },
-                    onBudgetUpdated = { viewModel.setMonthlyBudget(it) },
-                    onUpdateCategoryBudget = { title, limit -> viewModel.setCategoryBudget(title, limit) }
-                )
-                1 -> SavingsWishlistTabContent(
-                    goals = savingsGoals,
-                    onAddGoal = { title, target, emoji, date -> viewModel.addSavingsGoal(title, target, emoji, date) },
-                    onDeposit = { goal, deposit -> viewModel.depositToSavingsGoal(goal, deposit) },
-                    onDeleteGoal = { viewModel.deleteSavingsGoal(it) },
-                    onGenerateReasoningPlan = { viewModel.generateReasoningPlan(it) }
-                )
-                2 -> TransactionsTabContent(
-                    searchQuery = searchQuery,
-                    onSearchQueryChange = { viewModel.setSearchQuery(it) },
-                    selectedCategoryFilter = selectedCategoryFilter,
-                    onCategoryFilterChange = { viewModel.setSelectedCategoryFilter(it) },
-                    expensesList = filteredExpenses,
-                    onDeleteExpense = { viewModel.deleteExpense(it) }
-                )
-                3 -> Box(modifier = Modifier.padding(16.dp)) {
-                    Column {
-                        // AI Model Status Header
-                        Surface(
-                            color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f),
-                            shape = RoundedCornerShape(12.dp),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(bottom = 12.dp)
-                                .clickable { showAiConfigDialog = true }
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(12.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
+            // Ledger Chips Top Selector
+            LedgerSelectorBar(
+                ledgers = viewModel.ledgers,
+                selectedLedger = selectedLedger,
+                onLedgerSelected = { viewModel.setLedger(it) }
+            )
+
+            // Main Tab Content View
+            when (activeTab) {
+                0 -> {
+                    // TAB 0: 账单明细 & 全景概览
+                    LazyColumn(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(horizontal = 16.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                        contentPadding = PaddingValues(bottom = 80.dp)
+                    ) {
+                        item {
+                            NetWorthOverviewCard(
+                                expenses = allExpenses,
+                                savingsGoals = allGoals,
+                                investments = investments,
+                                lotteryRecords = lotteryRecords
+                            )
+                        }
+
+                        item {
+                            // Quick Feature Shortcut Bar
+                            Surface(
+                                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                                shape = RoundedCornerShape(16.dp),
+                                modifier = Modifier.fillMaxWidth()
                             ) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Icon(
-                                        imageVector = Icons.Default.Psychology,
-                                        contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.primary,
-                                        modifier = Modifier.size(20.dp)
+                                Column(modifier = Modifier.padding(12.dp)) {
+                                    Text(
+                                        text = "⚡ 特色理财工具直达",
+                                        style = MaterialTheme.typography.labelMedium,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.primary
                                     )
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Column {
-                                        Text(
-                                            text = "当前 AI 引擎：${aiConfig.providerType.displayName}",
-                                            style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold)
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween
+                                    ) {
+                                        FilterChip(
+                                            selected = false,
+                                            onClick = { viewModel.setActiveTab(1) },
+                                            label = { Text("📈 证券理财") }
                                         )
+                                        FilterChip(
+                                            selected = false,
+                                            onClick = { viewModel.setActiveTab(1) },
+                                            label = { Text("⚽ 足彩彩票") }
+                                        )
+                                        FilterChip(
+                                            selected = false,
+                                            onClick = { viewModel.setActiveTab(1) },
+                                            label = { Text("🌐 汇率换算") }
+                                        )
+                                        FilterChip(
+                                            selected = false,
+                                            onClick = { viewModel.setActiveTab(4) },
+                                            label = { Text("🤖 AI 智算") }
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
+                        item {
+                            BudgetOverviewCard(
+                                totalIncome = totalIncome,
+                                totalExpense = totalExpense,
+                                monthlyBudget = monthlyBudget,
+                                onBudgetClick = { showSetBudgetDialog = true }
+                            )
+                        }
+
+                        item {
+                            SearchBarAndFilter(
+                                searchQuery = searchQuery,
+                                onQueryChange = { viewModel.setSearchQuery(it) },
+                                selectedCategoryFilter = categoryFilter,
+                                onCategoryFilterSelect = { viewModel.setCategoryFilter(it) },
+                                selectedTypeFilter = typeFilter,
+                                onTypeFilterSelect = { viewModel.setTypeFilter(it) }
+                            )
+                        }
+
+                        if (filteredExpenses.isEmpty()) {
+                            item {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(180.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                        Icon(
+                                            imageVector = Icons.Default.Inbox,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(48.dp),
+                                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                        Spacer(modifier = Modifier.height(8.dp))
                                         Text(
-                                            text = "模型: ${aiConfig.getEffectiveModelName()} · 点击切换国内 DeepSeek/硅基流动/Qwen",
-                                            style = MaterialTheme.typography.bodySmall,
-                                            fontSize = 10.sp,
+                                            text = "暂无相关账单记录",
+                                            style = MaterialTheme.typography.bodyLarge,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant
                                         )
                                     }
                                 }
-                                Icon(
-                                    imageVector = Icons.Default.Settings,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.size(18.dp)
+                            }
+                        } else {
+                            items(
+                                items = filteredExpenses,
+                                key = { it.id }
+                            ) { exp ->
+                                ExpenseItemCard(
+                                    expense = exp,
+                                    onDeleteClick = { viewModel.deleteExpense(exp) }
                                 )
                             }
                         }
-
-                        AiAdvisorChatCard(
-                            chatMessages = chatMessages,
-                            isAiLoading = isAiLoading,
-                            onSendMessage = { viewModel.sendChatMessage(it) }
-                        )
                     }
                 }
-            }
-        }
-    }
 
-    // Manual Add Expense Sheet
-    if (showAddBottomSheet) {
-        AddExpenseBottomSheet(
-            sheetState = sheetState,
-            defaultDate = viewModel.todayDate,
-            currentLedger = selectedLedger,
-            onDismiss = { showAddBottomSheet = false },
-            onAddExpense = { amount, category, date, note, type, ledger ->
-                viewModel.addExpense(amount, category, date, note, type, ledger) {
-                    scope.launch { sheetState.hide() }.invokeOnCompletion {
-                        if (!sheetState.isVisible) {
-                            showAddBottomSheet = false
+                1 -> {
+                    // TAB 1: 证券理财、彩票足彩、实时汇率
+                    LazyColumn(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(horizontal = 16.dp),
+                        verticalArrangement = Arrangement.spacedBy(16.dp),
+                        contentPadding = PaddingValues(bottom = 80.dp)
+                    ) {
+                        item {
+                            NetWorthOverviewCard(
+                                expenses = allExpenses,
+                                savingsGoals = allGoals,
+                                investments = investments,
+                                lotteryRecords = lotteryRecords
+                            )
+                        }
+
+                        item {
+                            InvestmentTrackerCard(
+                                investments = investments,
+                                onAddInvestment = { viewModel.addInvestment(it) },
+                                onDeleteInvestment = { viewModel.deleteInvestment(it) },
+                                onRefreshMarketQuotes = { viewModel.refreshMarketQuotes() },
+                                isLoadingMarket = isLoadingMarket
+                            )
+                        }
+
+                        item {
+                            LotteryTrackerCard(
+                                lotteryRecords = lotteryRecords,
+                                onAddRecord = { viewModel.addLotteryRecord(it) },
+                                onDeleteRecord = { viewModel.deleteLotteryRecord(it) },
+                                onUpdateRecordStatus = { id, st, win -> viewModel.updateLotteryStatus(id, st, win) }
+                            )
+                        }
+
+                        item {
+                            CurrencyConverterCard(
+                                rates = exchangeRates,
+                                isLoadingRates = isLoadingRates,
+                                onRefreshRates = { viewModel.refreshExchangeRates() }
+                            )
+                        }
+                    }
+                }
+
+                2 -> {
+                    // TAB 2: 图表分析与分类预算
+                    LazyColumn(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(horizontal = 16.dp),
+                        verticalArrangement = Arrangement.spacedBy(16.dp),
+                        contentPadding = PaddingValues(bottom = 80.dp)
+                    ) {
+                        item {
+                            MonthlyChartCard(expenses = allExpenses)
+                        }
+
+                        item {
+                            BudgetOverviewCard(
+                                totalIncome = totalIncome,
+                                totalExpense = totalExpense,
+                                monthlyBudget = monthlyBudget,
+                                onBudgetClick = { showSetBudgetDialog = true }
+                            )
+                        }
+
+                        item {
+                            CategoryBudgetSection(
+                                expenses = allExpenses,
+                                categoryBudgets = categoryBudgets,
+                                onSetCategoryBudget = { cat, budget ->
+                                    viewModel.setCategoryBudget(cat, budget)
+                                }
+                            )
+                        }
+                    }
+                }
+
+                3 -> {
+                    // TAB 3: 攒钱愿望单
+                    LazyColumn(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(horizontal = 16.dp),
+                        verticalArrangement = Arrangement.spacedBy(14.dp),
+                        contentPadding = PaddingValues(bottom = 80.dp)
+                    ) {
+                        item {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column {
+                                    Text(
+                                        text = "攒钱愿望单",
+                                        style = MaterialTheme.typography.titleLarge,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                    Text(
+                                        text = "立下一个小目标，积累财富复利",
+                                        style = MaterialTheme.typography.labelMedium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+
+                                Button(
+                                    onClick = { showAddGoalDialog = true },
+                                    shape = RoundedCornerShape(12.dp)
+                                ) {
+                                    Icon(imageVector = Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text("新建愿望")
+                                }
+                            }
+                        }
+
+                        if (allGoals.isEmpty()) {
+                            item {
+                                Card(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .padding(32.dp)
+                                            .fillMaxWidth(),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text("还没有立下攒钱愿望，快点击上方新建吧！")
+                                    }
+                                }
+                            }
+                        } else {
+                            val totalWishTarget = allGoals.sumOf { it.targetAmount }
+                            val totalWishSaved = allGoals.sumOf { it.currentAmount }
+                            val totalProgress = if (totalWishTarget > 0) (totalWishSaved / totalWishTarget).toFloat().coerceIn(0f, 1f) else 0f
+
+                            item {
+                                Surface(
+                                    color = MaterialTheme.colorScheme.primaryContainer,
+                                    shape = RoundedCornerShape(20.dp),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Column(modifier = Modifier.padding(18.dp)) {
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Text(
+                                                text = "心愿池总览",
+                                                style = MaterialTheme.typography.titleMedium,
+                                                fontWeight = FontWeight.Bold,
+                                                color = MaterialTheme.colorScheme.onPrimaryContainer
+                                            )
+                                            Text(
+                                                text = "${(totalProgress * 100).toInt()}% 总达成",
+                                                style = MaterialTheme.typography.labelLarge,
+                                                fontWeight = FontWeight.Bold,
+                                                color = MaterialTheme.colorScheme.onPrimaryContainer
+                                            )
+                                        }
+
+                                        Spacer(modifier = Modifier.height(10.dp))
+
+                                        LinearProgressIndicator(
+                                            progress = { totalProgress },
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .height(10.dp)
+                                                .clip(RoundedCornerShape(5.dp)),
+                                            color = MaterialTheme.colorScheme.primary,
+                                            trackColor = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.2f)
+                                        )
+
+                                        Spacer(modifier = Modifier.height(10.dp))
+
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween
+                                        ) {
+                                            Text(
+                                                text = "已攒总额: ￥${String.format("%.2f", totalWishSaved)}",
+                                                style = MaterialTheme.typography.bodyMedium,
+                                                fontWeight = FontWeight.SemiBold,
+                                                color = MaterialTheme.colorScheme.onPrimaryContainer
+                                            )
+                                            Text(
+                                                text = "目标总计: ￥${String.format("%.2f", totalWishTarget)}",
+                                                style = MaterialTheme.typography.bodyMedium,
+                                                color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+
+                            items(allGoals, key = { it.id }) { goal ->
+                                SavingsGoalCard(
+                                    goal = goal,
+                                    onAddDepositClick = { selectedGoalForDeposit = goal },
+                                    onDeleteClick = { viewModel.deleteGoal(goal) }
+                                )
+                            }
+                        }
+                    }
+                }
+
+                4 -> {
+                    // TAB 4: AI 智算与理财顾问
+                    LazyColumn(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(horizontal = 16.dp),
+                        verticalArrangement = Arrangement.spacedBy(16.dp),
+                        contentPadding = PaddingValues(bottom = 80.dp)
+                    ) {
+                        item {
+                            AiFinancialInsightCard(
+                                expenses = allExpenses,
+                                monthlyBudget = monthlyBudget,
+                                isGeneratingInsight = isGeneratingInsight,
+                                onlineInsightText = onlineInsightText,
+                                onFetchOnlineInsight = { viewModel.fetchOnlineInsight() }
+                            )
+                        }
+
+                        item {
+                            AiAdvisorChatCard(
+                                chatMessages = chatMessages,
+                                onSendMessage = { viewModel.sendChatMessage(it) },
+                                isThinking = isAiThinking
+                            )
                         }
                     }
                 }
             }
+        }
+    }
+
+    // --- Dialogs & BottomSheets ---
+
+    // 1. Add Expense Bottom Sheet
+    if (showAddExpenseSheet) {
+        AddExpenseBottomSheet(
+            ledgers = viewModel.ledgers,
+            currentLedger = selectedLedger,
+            onDismiss = { showAddExpenseSheet = false },
+            onSaveExpense = { viewModel.addExpense(it) }
         )
     }
 
-    // Smart AI Voice/Text/Receipt Image Entry Dialog
+    // 2. Smart AI Quick Add Dialog
     if (showSmartAiDialog) {
         SmartAiAddDialog(
-            isAiLoading = isAiLoading,
-            onParseText = { text, callback -> viewModel.parseSmartVoiceText(text, callback) },
-            onParseReceiptImage = { base64, callback -> viewModel.parseReceiptImage(base64, callback) },
-            onConfirmExpense = { parsed ->
-                viewModel.addExpense(
-                    amount = parsed.amount,
-                    type = parsed.type,
-                    category = parsed.category,
-                    ledger = selectedLedger,
-                    note = parsed.note,
-                    date = parsed.date
-                )
+            onDismiss = {
+                viewModel.clearAiParsedResult()
+                showSmartAiDialog = false
             },
-            onDismiss = { showSmartAiDialog = false }
+            onParseText = { viewModel.parseExpenseWithAi(it) },
+            onParseImage = { base64, mime -> viewModel.parseExpenseImageWithAi(base64, mime) },
+            onConfirmAdd = { viewModel.addExpense(it) },
+            isParsing = isParsingAi,
+            parsedResult = parsedExpenseResult,
+            errorMessage = aiErrorMessage
         )
     }
 
-    // AI Model Config Center Dialog
-    if (showAiConfigDialog) {
-        AiConfigDialog(
-            currentConfig = aiConfig,
-            onSaveConfig = { viewModel.saveAiConfig(it) },
-            onTestConnection = { config, callback -> viewModel.testAiConnection(config, callback) },
-            onDismiss = { showAiConfigDialog = false }
-        )
-    }
-
-    // Financial Health Report Dialog
-    if (financialReport != null || isReportLoading) {
-        AiFinancialReportDialog(
-            reportText = financialReport,
-            isReportLoading = isReportLoading,
-            onDismiss = { viewModel.clearFinancialReport() }
-        )
-    }
-
-    // AI Deep Thinking / Reasoning Mode Dialog
-    if (reasoningPlan != null || isReasoningLoading) {
-        com.example.ui.components.AiDeepReasoningDialog(
-            reasoningPlanText = reasoningPlan,
-            isReasoningLoading = isReasoningLoading,
-            onDismiss = { viewModel.clearReasoningPlan() }
-        )
-    }
-
-    // Export Data Bottom Sheet
+    // 3. Export CSV Data Sheet
     if (showExportSheet) {
         ExportDataBottomSheet(
-            csvContent = viewModel.exportDataAsCsv(),
+            expenses = allExpenses,
             onDismiss = { showExportSheet = false }
         )
     }
-}
 
-@Composable
-private fun OverviewTabContent(
-    summary: MonthlySummary,
-    aiInsights: List<String>,
-    isAiLoading: Boolean,
-    chatMessages: List<ChatMessage>,
-    recurringBills: List<com.example.ui.components.RecurringBillItem>,
-    onAddRecurringBill: (com.example.ui.components.RecurringBillItem) -> Unit,
-    onDeleteRecurringBill: (com.example.ui.components.RecurringBillItem) -> Unit,
-    onSendMessage: (String) -> Unit,
-    onRefreshInsights: () -> Unit,
-    onGenerateReport: () -> Unit,
-    onBudgetUpdated: (Double) -> Unit,
-    onUpdateCategoryBudget: (String, Double) -> Unit
-) {
-    LazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
-    ) {
-        // Income / Expense / Budget Overview
-        item {
-            BudgetOverviewCard(
-                summary = summary,
-                onBudgetUpdated = onBudgetUpdated
-            )
-        }
-
-        // Monthly Category Chart Card
-        item {
-            MonthlyChartCard(summary = summary)
-        }
-
-        // Periodic Fixed Subscriptions & Recurring Bills
-        item {
-            RecurringBillsCard(
-                bills = recurringBills,
-                onAddBill = onAddRecurringBill,
-                onDeleteBill = onDeleteRecurringBill
-            )
-        }
-
-        // AI Personal Financial Insights Card
-        item {
-            AiInsightsCard(
-                aiInsights = aiInsights,
-                isAiLoading = isAiLoading,
-                onRefreshInsights = onRefreshInsights,
-                onGenerateReport = onGenerateReport
-            )
-        }
-
-        // AI 1v1 Advisor Interactive Chat
-        item {
-            AiAdvisorChatCard(
-                chatMessages = chatMessages,
-                isAiLoading = isAiLoading,
-                onSendMessage = onSendMessage
-            )
-        }
-
-        // Category Budget Alerts
-        item {
-            CategoryBudgetCard(
-                summary = summary,
-                onUpdateCategoryBudget = onUpdateCategoryBudget
-            )
-        }
-
-        item {
-            Spacer(modifier = Modifier.height(70.dp))
-        }
-    }
-}
-
-@Composable
-private fun SavingsWishlistTabContent(
-    goals: List<com.example.data.SavingsGoalEntity>,
-    onAddGoal: (String, Double, String, String) -> Unit,
-    onDeposit: (com.example.data.SavingsGoalEntity, Double) -> Unit,
-    onDeleteGoal: (com.example.data.SavingsGoalEntity) -> Unit,
-    onGenerateReasoningPlan: (String) -> Unit
-) {
-    LazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
-    ) {
-        item {
-            SavingsGoalCard(
-                goals = goals,
-                onAddGoal = onAddGoal,
-                onDeposit = onDeposit,
-                onDeleteGoal = onDeleteGoal,
-                onGenerateReasoningPlan = onGenerateReasoningPlan
-            )
-        }
-
-        item {
-            Spacer(modifier = Modifier.height(70.dp))
-        }
-    }
-}
-
-@Composable
-private fun TransactionsTabContent(
-    searchQuery: String,
-    onSearchQueryChange: (String) -> Unit,
-    selectedCategoryFilter: com.example.ui.model.ExpenseCategory?,
-    onCategoryFilterChange: (com.example.ui.model.ExpenseCategory?) -> Unit,
-    expensesList: List<com.example.data.ExpenseEntity>,
-    onDeleteExpense: (com.example.data.ExpenseEntity) -> Unit
-) {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(horizontal = 16.dp)
-    ) {
-        Spacer(modifier = Modifier.height(12.dp))
-
-        SearchBarAndFilter(
-            searchQuery = searchQuery,
-            onSearchQueryChange = onSearchQueryChange,
-            selectedCategoryFilter = selectedCategoryFilter,
-            onCategoryFilterChange = onCategoryFilterChange
+    // 4. Monthly AI Financial Report Dialog
+    if (monthlyReport != null || isReportLoading) {
+        AiFinancialReportDialog(
+            reportText = monthlyReport ?: "",
+            isLoading = isReportLoading,
+            onDismiss = { viewModel.dismissReport() }
         )
+    }
 
-        Spacer(modifier = Modifier.height(12.dp))
+    // 5. Set Budget Limit Dialog
+    if (showSetBudgetDialog) {
+        var budgetInput by remember { mutableStateOf(monthlyBudget.toInt().toString()) }
 
-        if (expensesList.isEmpty()) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f),
-                contentAlignment = Alignment.Center
-            ) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(
-                        text = "🔍",
-                        fontSize = 42.sp
+        AlertDialog(
+            onDismissRequest = { showSetBudgetDialog = false },
+            title = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Default.AccountBalanceWallet,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary
                     )
-                    Spacer(modifier = Modifier.height(12.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("设置月度总预算与分类额度", fontWeight = FontWeight.Bold)
+                }
+            },
+            text = {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 380.dp)
+                ) {
                     Text(
-                        text = "未搜索到匹配的账目记录",
-                        style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                    Text(
-                        text = "试试切换账本、搜索词或添加新账单吧",
+                        text = "设置月度总预算金额及各分类专属预算限额：",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    OutlinedTextField(
+                        value = budgetInput,
+                        onValueChange = { budgetInput = it },
+                        label = { Text("月度总预算 (元)") },
+                        prefix = { Text("￥ ") },
+                        singleLine = true,
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    Text(
+                        text = "常用分类快捷预算：",
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    LazyColumn(
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        val categories = ExpenseCategory.Categories.filter { !it.isIncome }
+                        items(categories, key = { it.name }) { cat ->
+                            var catBudgetInput by remember(cat.name, categoryBudgets) {
+                                mutableStateOf((categoryBudgets[cat.name] ?: cat.defaultMonthlyBudget).toInt().toString())
+                            }
+
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .background(
+                                        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                                        RoundedCornerShape(10.dp)
+                                    )
+                                    .padding(horizontal = 10.dp, vertical = 6.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(
+                                        imageVector = cat.icon,
+                                        contentDescription = cat.name,
+                                        tint = cat.color,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(
+                                        text = cat.name,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        fontWeight = FontWeight.Medium
+                                    )
+                                }
+
+                                OutlinedTextField(
+                                    value = catBudgetInput,
+                                    onValueChange = {
+                                        catBudgetInput = it
+                                        val newVal = it.toDoubleOrNull()
+                                        if (newVal != null && newVal >= 0) {
+                                            viewModel.setCategoryBudget(cat.name, newVal)
+                                        }
+                                    },
+                                    prefix = { Text("￥", style = MaterialTheme.typography.labelSmall) },
+                                    singleLine = true,
+                                    textStyle = MaterialTheme.typography.bodySmall,
+                                    modifier = Modifier.width(110.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val newB = budgetInput.toDoubleOrNull() ?: monthlyBudget
+                        viewModel.setMonthlyBudget(newB)
+                        showSetBudgetDialog = false
+                    },
+                    shape = RoundedCornerShape(10.dp)
+                ) {
+                    Text("保存设置")
+                }
+            },
+            dismissButton = {
+                OutlinedButton(
+                    onClick = { showSetBudgetDialog = false },
+                    shape = RoundedCornerShape(10.dp)
+                ) {
+                    Text("完成")
                 }
             }
-        } else {
-            LazyColumn(
-                modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(10.dp),
-                contentPadding = PaddingValues(bottom = 90.dp)
-            ) {
-                items(
-                    items = expensesList,
-                    key = { it.id }
-                ) { expense ->
-                    ExpenseItemCard(
-                        expense = expense,
-                        onDelete = onDeleteExpense
+        )
+    }
+
+    // 6. Deposit to Savings Goal Dialog
+    selectedGoalForDeposit?.let { goal ->
+        var depositText by remember { mutableStateOf("") }
+
+        AlertDialog(
+            onDismissRequest = { selectedGoalForDeposit = null },
+            title = { Text("存入攒钱基金：${goal.title}", fontWeight = FontWeight.Bold) },
+            text = {
+                OutlinedTextField(
+                    value = depositText,
+                    onValueChange = { depositText = it },
+                    label = { Text("本次存入金额 (元)") },
+                    prefix = { Text("￥ ") },
+                    singleLine = true
+                )
+            },
+            confirmButton = {
+                Button(onClick = {
+                    val dep = depositText.toDoubleOrNull() ?: 0.0
+                    if (dep > 0) {
+                        viewModel.depositToGoal(goal, dep)
+                        selectedGoalForDeposit = null
+                    }
+                }) {
+                    Text("确认存入")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { selectedGoalForDeposit = null }) {
+                    Text("取消")
+                }
+            }
+        )
+    }
+
+    // 7. Add New Savings Goal Dialog
+    if (showAddGoalDialog) {
+        var goalTitle by remember { mutableStateOf("") }
+        var targetAmountText by remember { mutableStateOf("") }
+
+        AlertDialog(
+            onDismissRequest = { showAddGoalDialog = false },
+            title = { Text("新建攒钱愿望", fontWeight = FontWeight.Bold) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(
+                        value = goalTitle,
+                        onValueChange = { goalTitle = it },
+                        label = { Text("愿望名称 (如: 购买数码设备/旅行包)") },
+                        singleLine = true
+                    )
+                    OutlinedTextField(
+                        value = targetAmountText,
+                        onValueChange = { targetAmountText = it },
+                        label = { Text("目标蓄水金额 (元)") },
+                        prefix = { Text("￥ ") },
+                        singleLine = true
                     )
                 }
+            },
+            confirmButton = {
+                Button(onClick = {
+                    val target = targetAmountText.toDoubleOrNull() ?: 0.0
+                    if (goalTitle.isNotBlank() && target > 0) {
+                        viewModel.addGoal(
+                            title = goalTitle,
+                            targetAmount = target,
+                            targetDateMillis = System.currentTimeMillis() + 90L * 24 * 3600 * 1000
+                        )
+                        showAddGoalDialog = false
+                    }
+                }) {
+                    Text("立下愿望")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showAddGoalDialog = false }) {
+                    Text("取消")
+                }
             }
-        }
+        )
+    }
+
+    // 8. AI Engine & Network Settings Dialog
+    if (showAiSettingsDialog) {
+        AiSettingsDialog(
+            aiConfigManager = viewModel.aiConfigManager,
+            geminiService = viewModel.geminiService,
+            onDismiss = { showAiSettingsDialog = false }
+        )
+    }
+
+    // 9. Monthly AI Financial Report Dialog
+    if (isReportLoading || monthlyReport != null) {
+        AiFinancialReportDialog(
+            reportText = monthlyReport ?: "",
+            isLoading = isReportLoading,
+            onDismiss = { viewModel.dismissReport() }
+        )
     }
 }

@@ -11,39 +11,35 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.platform.LocalContext
 
 private val DarkColorScheme = darkColorScheme(
-    primary = DarkPurplePrimary,
-    secondary = PurpleContainer,
-    tertiary = MinimalSurfaceContainer,
+    primary = ExpensePrimary,
+    secondary = ExpenseSecondary,
+    tertiary = ExpenseTertiary,
     background = DarkBackground,
     surface = DarkSurface,
-    onPrimary = DarkBackground,
-    onSecondary = PurpleOnContainer,
-    onBackground = MinimalBackground,
-    onSurface = MinimalBackground,
     surfaceVariant = DarkSurfaceVariant,
-    onSurfaceVariant = MinimalSurfaceContainer
+    onPrimary = LightSurface,
+    onBackground = TextPrimaryDark,
+    onSurface = TextPrimaryDark,
+    onSurfaceVariant = TextSecondaryDark
 )
 
 private val LightColorScheme = lightColorScheme(
-    primary = PurplePrimary,
-    onPrimary = PurpleOnPrimary,
-    primaryContainer = PurpleContainer,
-    onPrimaryContainer = PurpleOnContainer,
-    secondary = PurpleContainer,
-    onSecondary = PurpleOnContainer,
-    tertiary = MinimalSurfaceContainer,
-    background = MinimalBackground,
-    surface = MinimalSurface,
-    onBackground = TextMain,
-    onSurface = TextMain,
-    surfaceVariant = MinimalSurfaceVariant,
-    onSurfaceVariant = TextMuted
+    primary = ExpensePrimary,
+    secondary = ExpenseSecondary,
+    tertiary = ExpenseTertiary,
+    background = LightBackground,
+    surface = LightSurface,
+    surfaceVariant = LightSurfaceVariant,
+    onPrimary = LightSurface,
+    onBackground = TextPrimaryLight,
+    onSurface = TextPrimaryLight,
+    onSurfaceVariant = TextSecondaryLight
 )
 
 @Composable
 fun ExpenseTrackerTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
-    dynamicColor: Boolean = false, // Set to false to ensure Clean Minimalism design is consistently displayed
+    dynamicColor: Boolean = true,
     content: @Composable () -> Unit
 ) {
     val colorScheme = when {
@@ -61,4 +57,3 @@ fun ExpenseTrackerTheme(
         content = content
     )
 }
-

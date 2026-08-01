@@ -1,108 +1,200 @@
 package com.example.ui.components
 
-import android.content.ClipData
-import android.content.ClipboardManager
-import android.content.Context
-import android.widget.Toast
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
+import android.content.Intent
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ContentCopy
-import androidx.compose.material.icons.filled.Download
-import androidx.compose.material3.Button
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.Text
-import androidx.compose.material3.rememberModalBottomSheetState
-import androidx.compose.runtime.Composable
+import androidx.compose.material.icons.filled.FileDownload
+import androidx.compose.material.icons.filled.Share
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
+import com.example.data.ExpenseEntity
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ExportDataBottomSheet(
-    csvContent: String,
+    expenses: List<ExpenseEntity>,
     onDismiss: () -> Unit
 ) {
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val context = LocalContext.current
+    val clipboardManager = LocalClipboardManager.current
+    var isExported by remember { mutableStateOf(false) }
+
+    var pendingExportAction by remember { mutableStateOf<(() -> Unit)?>(null) }
+    var showConfirmDialog by remember { mutableStateOf(false) }
+
+    fun generateCsv(): String {
+        val sb = StringBuilder()
+        sb.append("ID,账单名称,金额,类型,分类,账本,日期,备注\n")
+        expenses.forEach { exp ->
+            sb.append("${exp.id},\"${exp.title}\",${exp.amount},${exp.type},${exp.category},${exp.ledgerName},${exp.dateMillis},\"${exp.note}\"\n")
+        }
+        return sb.toString()
+    }
+
+    fun shareCsvData(csv: String) {
+        val sendIntent = Intent().apply {
+            action = Intent.ACTION_SEND
+            putExtra(Intent.EXTRA_TEXT, csv)
+            type = "text/csv"
+        }
+        val shareIntent = Intent.createChooser(sendIntent, "导出/分享账单数据")
+        context.startActivity(shareIntent)
+    }
+
+    if (showConfirmDialog) {
+        AlertDialog(
+            onDismissRequest = {
+                showConfirmDialog = false
+                pendingExportAction = null
+            },
+            title = {
+                Text("确认导出账单备份数据？", fontWeight = FontWeight.Bold)
+            },
+            text = {
+                Text("即将全量导出当前筛选的 ${expenses.size} 条账单数据，并生成 CSV 表格与 Room 数据备份。是否确认继续？")
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showConfirmDialog = false
+                        pendingExportAction?.invoke()
+                        pendingExportAction = null
+                    },
+                    shape = RoundedCornerShape(10.dp)
+                ) {
+                    Text("确认导出")
+                }
+            },
+            dismissButton = {
+                OutlinedButton(
+                    onClick = {
+                        showConfirmDialog = false
+                        pendingExportAction = null
+                    },
+                    shape = RoundedCornerShape(10.dp)
+                ) {
+                    Text("取消")
+                }
+            }
+        )
+    }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
-        sheetState = sheetState,
-        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
+        sheetState = rememberModalBottomSheetState()
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 20.dp, vertical = 12.dp)
+                .padding(20.dp)
+                .navigationBarsPadding()
+                .testTag("export_data_bottom_sheet")
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(imageVector = Icons.Default.Download, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("数据备份与导出 (CSV 格式)", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold))
-            }
+            Text(
+                text = "导出账单与数据备份",
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold
+            )
 
-            Spacer(modifier = Modifier.height(6.dp))
-            Text("包含当前所选筛选条件下的全部账目明细，方便导入 Excel 或本地备份。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Spacer(modifier = Modifier.height(8.dp))
 
-            Spacer(modifier = Modifier.height(14.dp))
-
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(200.dp)
-                    .clip(RoundedCornerShape(16.dp))
-                    .background(MaterialTheme.colorScheme.surfaceVariant)
-                    .padding(12.dp)
-                    .verticalScroll(rememberScrollState())
-            ) {
-                Text(
-                    text = csvContent.ifBlank { "暂无可导出的明细数据" },
-                    fontFamily = FontFamily.Monospace,
-                    fontSize = 12.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
+            Text(
+                text = "共有 ${expenses.size} 条账单记录，可复制为 CSV 或调用系统分享发送",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            Button(
-                onClick = {
-                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                    val clip = ClipData.newPlainText("Expenses_Export.csv", csvContent)
-                    clipboard.setPrimaryClip(clip)
-                    Toast.makeText(context, "已成功复制 CSV 数据到剪贴板！", Toast.LENGTH_SHORT).show()
-                    onDismiss()
-                },
+            Card(
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(16.dp)
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
             ) {
-                Icon(imageVector = Icons.Default.ContentCopy, contentDescription = null, modifier = Modifier.size(18.dp))
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("复制 CSV 数据内容")
+                Column(modifier = Modifier.padding(14.dp)) {
+                    Text(text = "📄 CSV 数据文本预览：", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text(
+                        text = generateCsv().take(250) + if (expenses.size > 3) "\n..." else "",
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
             }
 
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(20.dp))
+
+            if (isExported) {
+                Surface(
+                    color = MaterialTheme.colorScheme.primaryContainer,
+                    shape = RoundedCornerShape(10.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        text = "✅ 完整 CSV 表格数据已复制到系统剪贴板！",
+                        modifier = Modifier.padding(14.dp),
+                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+                Spacer(modifier = Modifier.height(12.dp))
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Button(
+                    onClick = {
+                        pendingExportAction = {
+                            val csv = generateCsv()
+                            clipboardManager.setText(AnnotatedString(csv))
+                            isExported = true
+                        }
+                        showConfirmDialog = true
+                    },
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Icon(imageVector = Icons.Default.ContentCopy, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("复制 CSV 文本")
+                }
+
+                FilledTonalButton(
+                    onClick = {
+                        pendingExportAction = {
+                            val csv = generateCsv()
+                            shareCsvData(csv)
+                        }
+                        showConfirmDialog = true
+                    },
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Icon(imageVector = Icons.Default.Share, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("系统分享/导出")
+                }
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            OutlinedButton(
+                onClick = onDismiss,
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Text("关闭")
+            }
         }
     }
 }

@@ -1,38 +1,34 @@
 package com.example.data
 
 import kotlinx.coroutines.flow.Flow
-import java.time.LocalDate
+import kotlinx.coroutines.flow.first
+import java.util.Calendar
 
 class ExpenseRepository(
     private val expenseDao: ExpenseDao,
     private val savingsGoalDao: SavingsGoalDao
 ) {
-
     val allExpenses: Flow<List<ExpenseEntity>> = expenseDao.getAllExpenses()
-    val allSavingsGoals: Flow<List<SavingsGoalEntity>> = savingsGoalDao.getAllGoals()
+    val allGoals: Flow<List<SavingsGoalEntity>> = savingsGoalDao.getAllGoals()
 
-    fun getExpensesByMonth(monthPrefix: String): Flow<List<ExpenseEntity>> {
-        return expenseDao.getExpensesByMonth(monthPrefix)
+    fun getExpensesByLedger(ledgerName: String): Flow<List<ExpenseEntity>> {
+        return expenseDao.getExpensesByLedger(ledgerName)
     }
 
-    suspend fun insert(expense: ExpenseEntity): Long {
+    suspend fun insertExpense(expense: ExpenseEntity): Long {
         return expenseDao.insertExpense(expense)
     }
 
-    suspend fun insertExpenses(expenses: List<ExpenseEntity>) {
-        expenseDao.insertExpenses(expenses)
+    suspend fun updateExpense(expense: ExpenseEntity) {
+        expenseDao.updateExpense(expense)
     }
 
-    suspend fun delete(expense: ExpenseEntity) {
+    suspend fun deleteExpense(expense: ExpenseEntity) {
         expenseDao.deleteExpense(expense)
     }
 
-    suspend fun deleteById(id: Int) {
+    suspend fun deleteExpenseById(id: Long) {
         expenseDao.deleteExpenseById(id)
-    }
-
-    suspend fun deleteAllExpenses() {
-        expenseDao.deleteAllExpenses()
     }
 
     suspend fun insertGoal(goal: SavingsGoalEntity): Long {
@@ -47,118 +43,143 @@ class ExpenseRepository(
         savingsGoalDao.deleteGoal(goal)
     }
 
-    suspend fun checkAndSeedInitialData() {
-        if (expenseDao.getExpenseCount() == 0) {
-            val today = LocalDate.now()
-            val yearMonth = String.format("%04d-%02d", today.year, today.monthValue)
-            val prevMonth = if (today.monthValue > 1) {
-                String.format("%04d-%02d", today.year, today.monthValue - 1)
-            } else {
-                String.format("%04d-12", today.year - 1)
-            }
+    suspend fun deleteGoalById(id: Long) {
+        savingsGoalDao.deleteGoalById(id)
+    }
 
-            val seedList = listOf(
+    suspend fun seedInitialDataIfEmpty() {
+        val existingExpenses = allExpenses.first()
+        if (existingExpenses.isEmpty()) {
+            val now = System.currentTimeMillis()
+            val dayMs = 24 * 3600 * 1000L
+
+            val initialExpenses = listOf(
                 ExpenseEntity(
-                    amount = 38.5,
-                    category = "餐饮",
-                    date = "$yearMonth-${String.format("%02d", minOf(today.dayOfMonth, 25))}",
-                    note = "午餐精选商务套餐",
-                    type = "支出",
-                    ledger = "日常账本"
-                ),
-                ExpenseEntity(
-                    amount = 12000.0,
+                    title = "七月份基本工资",
+                    amount = 18500.0,
+                    type = TransactionType.INCOME.name,
                     category = "工资",
-                    date = "$yearMonth-05",
-                    note = "公司发薪日全额工资",
-                    type = "收入",
-                    ledger = "日常账本"
+                    ledgerName = "日常账本",
+                    dateMillis = now - dayMs * 1,
+                    note = "公司代扣社保后实发"
                 ),
                 ExpenseEntity(
-                    amount = 18.0,
-                    category = "交通",
-                    date = "$yearMonth-${String.format("%02d", minOf(today.dayOfMonth, 25))}",
-                    note = "地铁出行与共享单车",
-                    type = "支出",
-                    ledger = "日常账本"
-                ),
-                ExpenseEntity(
-                    amount = 68.0,
-                    category = "娱乐",
-                    date = "$yearMonth-${String.format("%02d", maxOf(today.dayOfMonth - 2, 1))}",
-                    note = "周末电影票与爆米花",
-                    type = "支出",
-                    ledger = "日常账本"
-                ),
-                ExpenseEntity(
-                    amount = 159.0,
-                    category = "购物",
-                    date = "$yearMonth-${String.format("%02d", maxOf(today.dayOfMonth - 3, 1))}",
-                    note = "夏季纯棉T恤与生活用品",
-                    type = "支出",
-                    ledger = "日常账本"
-                ),
-                ExpenseEntity(
-                    amount = 2200.0,
-                    category = "住房",
-                    date = "$yearMonth-01",
-                    note = "月度房租与物业管理费",
-                    type = "支出",
-                    ledger = "日常账本"
-                ),
-                ExpenseEntity(
-                    amount = 1500.0,
-                    category = "兼职",
-                    date = "$yearMonth-12",
-                    note = "自由职业设计项目尾款",
-                    type = "收入",
-                    ledger = "日常账本"
-                ),
-                ExpenseEntity(
-                    amount = 45.0,
+                    title = "星巴克生椰拿铁与三明治",
+                    amount = 48.0,
+                    type = TransactionType.EXPENSE.name,
                     category = "餐饮",
-                    date = "$yearMonth-${String.format("%02d", maxOf(today.dayOfMonth - 5, 1))}",
-                    note = "朋友聚会饮品咖啡",
-                    type = "支出",
-                    ledger = "日常账本"
+                    ledgerName = "日常账本",
+                    dateMillis = now - dayMs * 1,
+                    note = "工作日早午餐"
                 ),
                 ExpenseEntity(
-                    amount = 850.0,
+                    title = "地铁交通卡充值",
+                    amount = 200.0,
+                    type = TransactionType.EXPENSE.name,
                     category = "交通",
-                    date = "$yearMonth-10",
-                    note = "出差高铁票与酒店费用",
-                    type = "支出",
-                    ledger = "工作报销"
+                    ledgerName = "日常账本",
+                    dateMillis = now - dayMs * 2,
+                    note = "自动扣款续费"
+                ),
+                ExpenseEntity(
+                    title = "山姆会员店周末大采购",
+                    amount = 688.50,
+                    type = TransactionType.EXPENSE.name,
+                    category = "购物",
+                    ledgerName = "日常账本",
+                    dateMillis = now - dayMs * 3,
+                    note = "购买生鲜牛肉、牛奶和水果"
+                ),
+                ExpenseEntity(
+                    title = "精装公寓房租与物业费",
+                    amount = 3200.0,
+                    type = TransactionType.EXPENSE.name,
+                    category = "居住",
+                    ledgerName = "日常账本",
+                    dateMillis = now - dayMs * 5,
+                    note = "月度例行缴费"
+                ),
+                ExpenseEntity(
+                    title = "朋友聚餐与看电影",
+                    amount = 320.0,
+                    type = TransactionType.EXPENSE.name,
+                    category = "娱乐",
+                    ledgerName = "日常账本",
+                    dateMillis = now - dayMs * 6,
+                    note = "周末IMAX观影"
+                ),
+                ExpenseEntity(
+                    title = "理财基金季度分红",
+                    amount = 1200.0,
+                    type = TransactionType.INCOME.name,
+                    category = "理财",
+                    ledgerName = "日常账本",
+                    dateMillis = now - dayMs * 8,
+                    note = "稳健型基金派息"
+                ),
+                ExpenseEntity(
+                    title = "三亚度假酒店预订",
+                    amount = 2400.0,
+                    type = TransactionType.EXPENSE.name,
+                    category = "娱乐",
+                    ledgerName = "旅游专项",
+                    dateMillis = now - dayMs * 10,
+                    note = "夏日度假定金"
+                ),
+                ExpenseEntity(
+                    title = "往返机票两张",
+                    amount = 1860.0,
+                    type = TransactionType.EXPENSE.name,
+                    category = "交通",
+                    ledgerName = "旅游专项",
+                    dateMillis = now - dayMs * 12,
+                    note = "早鸟特价机票"
                 )
             )
-            expenseDao.insertExpenses(seedList)
+
+            for (expense in initialExpenses) {
+                expenseDao.insertExpense(expense)
+            }
         }
 
-        if (savingsGoalDao.getGoalCount() == 0) {
+        val existingGoals = allGoals.first()
+        if (existingGoals.isEmpty()) {
+            val now = System.currentTimeMillis()
+            val monthMs = 30 * 24 * 3600 * 1000L
+
             val initialGoals = listOf(
                 SavingsGoalEntity(
-                    title = "换购旗舰手机",
-                    targetAmount = 6999.0,
-                    currentAmount = 4500.0,
-                    emoji = "📱",
-                    targetDate = "2026-10-01"
+                    title = "更换最新款 M3 Max MacBook Pro",
+                    targetAmount = 21999.0,
+                    currentAmount = 14500.0,
+                    category = "数码",
+                    targetDateMillis = now + monthMs * 2,
+                    iconName = "laptop",
+                    note = "提升开发效率与剪辑速度"
                 ),
                 SavingsGoalEntity(
-                    title = "海岛年终度假基金",
-                    targetAmount = 8000.0,
-                    currentAmount = 3200.0,
-                    emoji = "🏖️",
-                    targetDate = "2026-12-25"
+                    title = "日本京都关西红叶双人自由行",
+                    targetAmount = 18000.0,
+                    currentAmount = 8200.0,
+                    category = "旅游",
+                    targetDateMillis = now + monthMs * 4,
+                    iconName = "flight",
+                    note = "预算包括温泉酒店与赏枫门票"
                 ),
                 SavingsGoalEntity(
-                    title = "应急备用金储备",
-                    targetAmount = 20000.0,
-                    currentAmount = 15000.0,
-                    emoji = "🛡️",
-                    targetDate = "2026-12-31"
+                    title = "6个月紧急六位数备用金储备",
+                    targetAmount = 50000.0,
+                    currentAmount = 35000.0,
+                    category = "储蓄",
+                    targetDateMillis = now + monthMs * 6,
+                    iconName = "shield",
+                    note = "存入高利息大额存单"
                 )
             )
-            savingsGoalDao.insertGoals(initialGoals)
+
+            for (goal in initialGoals) {
+                savingsGoalDao.insertGoal(goal)
+            }
         }
     }
 }

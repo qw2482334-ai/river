@@ -1,45 +1,120 @@
 package com.example.data
 
-enum class AiProviderType(val displayName: String, val defaultUrl: String, val defaultModel: String) {
-    GEMINI_OFFICIAL("Google Gemini 官方 (默认)", "https://generativelanguage.googleapis.com", "gemini-3.5-flash"),
-    DEEPSEEK("DeepSeek 官方 API (国内推荐)", "https://api.deepseek.com/v1", "deepseek-chat"),
-    SILICON_FLOW("硅基流动 SiliconFlow (国内极速)", "https://api.siliconflow.cn/v1", "deepseek-ai/DeepSeek-V3"),
-    QWEN("阿里通义千问 Qwen", "https://dashscope.aliyuncs.com/compatible-mode/v1", "qwen-turbo"),
-    MOONSHOT("Moonshot / Kimi 智能体", "https://api.moonshot.cn/v1", "moonshot-v1-8k"),
-    CUSTOM_OPENAI("自定义 OpenAI / 代理中转站", "https://api.openai.com/v1", "gpt-3.5-turbo")
-}
+import android.content.Context
+import android.content.SharedPreferences
+import com.example.BuildConfig
 
 data class AiConfig(
-    val providerType: AiProviderType = AiProviderType.GEMINI_OFFICIAL,
-    val customBaseUrl: String = "",
-    val customApiKey: String = "",
-    val customModelName: String = ""
-) {
-    fun getEffectiveBaseUrl(): String {
-        return if (customBaseUrl.isNotBlank()) {
-            customBaseUrl.trimEnd('/')
-        } else {
-            providerType.defaultUrl
+    val apiKey: String,
+    val baseUrl: String = "https://generativelanguage.googleapis.com/",
+    val modelName: String = "gemini-1.5-flash",
+    val protocolType: String = "GEMINI", // GEMINI or OPENAI
+    val provider: String = "GEMINI"
+)
+
+class AiConfigManager(context: Context) {
+    private val prefs: SharedPreferences =
+        context.getSharedPreferences("ai_config_prefs", Context.MODE_PRIVATE)
+
+    fun getApiKey(): String {
+        val savedKey = prefs.getString("api_key", "") ?: ""
+        if (savedKey.isNotBlank()) return savedKey
+        return try {
+            val buildKey = BuildConfig.GEMINI_API_KEY
+            if (buildKey.isBlank() || buildKey == "MY_GEMINI_API_KEY") "" else buildKey
+        } catch (e: Exception) {
+            ""
         }
     }
 
-    fun getEffectiveApiKey(fallbackKey: String = ""): String {
-        return if (customApiKey.isNotBlank()) {
-            customApiKey.trim()
-        } else {
-            fallbackKey
-        }
+    fun saveApiKey(key: String) {
+        prefs.edit().putString("api_key", key.trim()).apply()
     }
 
-    fun getEffectiveModelName(): String {
-        return if (customModelName.isNotBlank()) {
-            customModelName.trim()
-        } else {
-            providerType.defaultModel
-        }
+    fun getBaseUrl(): String {
+        val savedUrl = prefs.getString("base_url", "") ?: ""
+        if (savedUrl.isNotBlank()) return savedUrl
+        return "https://generativelanguage.googleapis.com/"
     }
 
-    fun isOpenAiCompatible(): Boolean {
-        return providerType != AiProviderType.GEMINI_OFFICIAL
+    fun saveBaseUrl(url: String) {
+        val formatted = if (url.isBlank()) "https://generativelanguage.googleapis.com/"
+        else if (!url.endsWith("/")) "$url/"
+        else url
+        prefs.edit().putString("base_url", formatted.trim()).apply()
+    }
+
+    fun getModelName(): String {
+        val savedModel = prefs.getString("model_name", "") ?: ""
+        if (savedModel.isNotBlank()) return savedModel
+        return "gemini-1.5-flash"
+    }
+
+    fun saveModelName(model: String) {
+        val formatted = if (model.isBlank()) "gemini-1.5-flash" else model.trim()
+        prefs.edit().putString("model_name", formatted).apply()
+    }
+
+    fun getProtocolType(): String {
+        val savedProtocol = prefs.getString("protocol_type", "") ?: ""
+        if (savedProtocol.isNotBlank()) return savedProtocol
+        val url = getBaseUrl()
+        return if (url.contains("googleapis.com")) "GEMINI" else "OPENAI"
+    }
+
+    fun saveProtocolType(protocol: String) {
+        prefs.edit().putString("protocol_type", protocol).apply()
+    }
+
+    fun getProvider(): String {
+        return prefs.getString("provider", "GEMINI") ?: "GEMINI"
+    }
+
+    fun saveProvider(provider: String) {
+        prefs.edit().putString("provider", provider).apply()
+    }
+
+    fun getConfig(): AiConfig {
+        return AiConfig(
+            apiKey = getApiKey(),
+            baseUrl = getBaseUrl(),
+            modelName = getModelName(),
+            protocolType = getProtocolType(),
+            provider = getProvider()
+        )
+    }
+
+    fun applyPreset(providerKey: String) {
+        saveProvider(providerKey)
+        when (providerKey) {
+            "GEMINI" -> {
+                saveBaseUrl("https://generativelanguage.googleapis.com/")
+                saveModelName("gemini-1.5-flash")
+                saveProtocolType("GEMINI")
+            }
+            "DEEPSEEK" -> {
+                saveBaseUrl("https://api.deepseek.com/")
+                saveModelName("deepseek-chat")
+                saveProtocolType("OPENAI")
+            }
+            "SILICONFLOW" -> {
+                saveBaseUrl("https://api.siliconflow.cn/v1/")
+                saveModelName("deepseek-ai/DeepSeek-V3")
+                saveProtocolType("OPENAI")
+            }
+            "QWEN" -> {
+                saveBaseUrl("https://dashscope.aliyuncs.com/compatible-mode/v1/")
+                saveModelName("qwen-turbo")
+                saveProtocolType("OPENAI")
+            }
+            "KIMI" -> {
+                saveBaseUrl("https://api.moonshot.cn/v1/")
+                saveModelName("moonshot-v1-8k")
+                saveProtocolType("OPENAI")
+            }
+            "CUSTOM" -> {
+                saveProtocolType("OPENAI")
+            }
+        }
     }
 }

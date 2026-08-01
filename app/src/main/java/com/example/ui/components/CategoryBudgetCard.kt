@@ -1,183 +1,360 @@
 package com.example.ui.components
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.material.icons.filled.NotificationsActive
+import androidx.compose.material.icons.filled.PieChart
+import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material.icons.filled.WarningAmber
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.ui.MonthlySummary
-import com.example.ui.model.ExpenseCategory
+import com.example.data.ExpenseCategory
+import com.example.data.ExpenseEntity
+import com.example.data.TransactionType
+import com.example.ui.theme.ExpenseRed
 
 @Composable
-fun CategoryBudgetCard(
-    summary: MonthlySummary,
-    onUpdateCategoryBudget: (String, Double) -> Unit,
+fun CategoryBudgetSection(
+    expenses: List<ExpenseEntity>,
+    categoryBudgets: Map<String, Double>,
+    onSetCategoryBudget: (category: String, budget: Double) -> Unit,
     modifier: Modifier = Modifier
 ) {
     var editingCategory by remember { mutableStateOf<ExpenseCategory?>(null) }
-    var inputLimitText by remember { mutableStateOf("") }
 
-    val categoryTotals = summary.categoryTotals
-    val categoryBudgets = summary.categoryBudgets
+    // Calculate spending per category
+    val categorySpentMap = remember(expenses) {
+        expenses.filter { it.type == TransactionType.EXPENSE.name }
+            .groupBy { it.category }
+            .mapValues { entry -> entry.value.sumOf { it.amount } }
+    }
+
+    val expenseCategories = remember { ExpenseCategory.Categories.filter { !it.isIncome } }
+
+    // Find warning/alert categories
+    val alertCategories = remember(categorySpentMap, categoryBudgets) {
+        expenseCategories.mapNotNull { cat ->
+            val spent = categorySpentMap[cat.name] ?: 0.0
+            val budget = categoryBudgets[cat.name] ?: cat.defaultMonthlyBudget
+            if (budget > 0) {
+                val ratio = spent / budget
+                if (ratio >= 1.0) {
+                    Triple(cat, spent, budget to "超限")
+                } else if (ratio >= 0.8) {
+                    Triple(cat, spent, budget to "预警")
+                } else null
+            } else null
+        }
+    }
 
     Card(
-        modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(24.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)),
-        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+        modifier = modifier
+            .fillMaxWidth()
+            .testTag("category_budget_section_card"),
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
         Column(modifier = Modifier.padding(18.dp)) {
-            Text(
-                text = "📊 分类预算管控与预警",
-                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
-            )
-            Text(
-                text = "针对重点类别设置独立额度，防超支提醒",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-
-            Spacer(modifier = Modifier.height(14.dp))
-
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                ExpenseCategory.expenseCategories.take(5).forEach { category ->
-                    val spent = categoryTotals[category] ?: 0.0
-                    val budgetLimit = categoryBudgets[category.title] ?: 1000.0
-                    val progress = if (budgetLimit > 0) (spent / budgetLimit).coerceIn(0.0, 1.0).toFloat() else 0f
-                    val isOver = spent > budgetLimit
-
-                    val statusColor = when {
-                        isOver -> Color(0xFFEF4444)
-                        progress > 0.8f -> Color(0xFFF59E0B)
-                        else -> Color(0xFF10B981)
-                    }
-
+            // Section Header
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
                     Box(
                         modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(16.dp))
-                            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f))
-                            .padding(12.dp)
+                            .size(36.dp)
+                            .clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.primaryContainer),
+                        contentAlignment = Alignment.Center
                     ) {
-                        Column {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Text(text = category.emoji, fontSize = 18.sp, modifier = Modifier.padding(end = 6.dp))
-                                    Text(
-                                        text = category.title,
-                                        style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold)
-                                    )
-                                }
+                        Icon(
+                            imageVector = Icons.Default.PieChart,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Column {
+                        Text(
+                            text = "分类支出预算与预警",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            text = "为不同消费品类独立设限并实时监控",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
 
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Text(
-                                        text = if (isOver) "⚠️ 超支 ￥${String.format("%.0f", spent - budgetLimit)}" else "已用 ￥${String.format("%.0f", spent)} / ￥${String.format("%.0f", budgetLimit)}",
-                                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
-                                        color = statusColor
-                                    )
+                if (alertCategories.isNotEmpty()) {
+                    Surface(
+                        color = ExpenseRed.copy(alpha = 0.15f),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Warning,
+                                contentDescription = null,
+                                tint = ExpenseRed,
+                                modifier = Modifier.size(14.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = "${alertCategories.size}项需关注",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = ExpenseRed,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+                }
+            }
 
-                                    IconButton(
-                                        onClick = {
-                                            editingCategory = category
-                                            inputLimitText = String.format("%.0f", budgetLimit)
-                                        }
-                                    ) {
-                                        Icon(imageVector = Icons.Default.Edit, contentDescription = "修改", tint = MaterialTheme.colorScheme.outline, modifier = Modifier.size(16.dp))
-                                    }
-                                }
-                            }
-
-                            Spacer(modifier = Modifier.height(6.dp))
-
-                            // Progress Bar
-                            Box(
+            // Global Category Alert Notification Banner if any alert exists
+            AnimatedVisibility(visible = alertCategories.isNotEmpty()) {
+                Column {
+                    Spacer(modifier = Modifier.height(14.dp))
+                    Surface(
+                        color = ExpenseRed.copy(alpha = 0.1f),
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(12.dp),
+                            verticalAlignment = Alignment.Top
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.NotificationsActive,
+                                contentDescription = "预警通知",
+                                tint = ExpenseRed,
                                 modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(8.dp)
-                                    .clip(RoundedCornerShape(4.dp))
-                                    .background(MaterialTheme.colorScheme.surfaceVariant)
-                            ) {
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxHeight()
-                                        .fillMaxWidth(progress)
-                                        .clip(RoundedCornerShape(4.dp))
-                                        .background(statusColor)
+                                    .size(20.dp)
+                                    .padding(top = 2.dp)
+                            )
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Column {
+                                Text(
+                                    text = "🚨 分类预算预警通知",
+                                    style = MaterialTheme.typography.labelLarge,
+                                    fontWeight = FontWeight.Bold,
+                                    color = ExpenseRed
                                 )
+                                Spacer(modifier = Modifier.height(4.dp))
+                                alertCategories.forEach { (cat, spent, pair) ->
+                                    val (budget, status) = pair
+                                    val pct = (spent / budget * 100).toInt()
+                                    val text = if (status == "超限") {
+                                        "• 【${cat.name}】已超出限额！已支出 ￥${String.format("%.1f", spent)} (额度 ￥${budget.toInt()})"
+                                    } else {
+                                        "• 【${cat.name}】已使用 ${pct}%！接近限额 (￥${String.format("%.1f", spent)} / ￥${budget.toInt()})"
+                                    }
+                                    Text(
+                                        text = text,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                }
                             }
                         }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Category Items Progress List
+            expenseCategories.forEach { cat ->
+                val spent = categorySpentMap[cat.name] ?: 0.0
+                val budget = categoryBudgets[cat.name] ?: cat.defaultMonthlyBudget
+                val progress = if (budget > 0) (spent / budget).toFloat().coerceIn(0f, 1f) else 0f
+                val isExceeded = budget > 0 && spent >= budget
+                val isApproaching = budget > 0 && !isExceeded && spent >= budget * 0.8
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(36.dp)
+                            .clip(CircleShape)
+                            .background(cat.color.copy(alpha = 0.15f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = cat.icon,
+                            contentDescription = cat.name,
+                            tint = cat.color,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.width(10.dp))
+
+                    Column(modifier = Modifier.weight(1f)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                    text = cat.name,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+
+                                if (isExceeded) {
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(
+                                        text = "🚨 超额",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = ExpenseRed,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                } else if (isApproaching) {
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(
+                                        text = "⚠️ 预警",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = Color(0xFFE65100),
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            }
+
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                    text = "￥${String.format("%.0f", spent)} / ￥${budget.toInt()}",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = if (isExceeded) ExpenseRed else if (isApproaching) Color(0xFFE65100) else MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+
+                                Spacer(modifier = Modifier.width(4.dp))
+
+                                IconButton(
+                                    onClick = { editingCategory = cat },
+                                    modifier = Modifier.size(24.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Edit,
+                                        contentDescription = "修改【${cat.name}】预算",
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(14.dp)
+                                    )
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(4.dp))
+
+                        LinearProgressIndicator(
+                            progress = { progress },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(6.dp)
+                                .clip(RoundedCornerShape(3.dp)),
+                            color = when {
+                                isExceeded -> ExpenseRed
+                                isApproaching -> Color(0xFFE65100)
+                                else -> cat.color
+                            },
+                            trackColor = MaterialTheme.colorScheme.surfaceVariant
+                        )
                     }
                 }
             }
         }
     }
 
+    // Edit Category Budget Dialog
     editingCategory?.let { cat ->
+        var inputBudget by remember {
+            mutableStateOf((categoryBudgets[cat.name] ?: cat.defaultMonthlyBudget).toInt().toString())
+        }
+
         AlertDialog(
             onDismissRequest = { editingCategory = null },
-            title = { Text("修改【${cat.title}】预算上限", fontWeight = FontWeight.Bold) },
+            title = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = cat.icon,
+                        contentDescription = null,
+                        tint = cat.color,
+                        modifier = Modifier.size(24.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("设置【${cat.name}】支出预算", fontWeight = FontWeight.Bold)
+                }
+            },
             text = {
-                OutlinedTextField(
-                    value = inputLimitText,
-                    onValueChange = { inputLimitText = it },
-                    label = { Text("分类预算上限 (元)") },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
-                )
+                Column {
+                    Text(
+                        text = "当该分类当月总支出达到预算的 80% 或超出时，将自动向您发出 UI 预警通知。",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    OutlinedTextField(
+                        value = inputBudget,
+                        onValueChange = { inputBudget = it },
+                        label = { Text("${cat.name}月度限额 (元)") },
+                        prefix = { Text("￥ ") },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
             },
             confirmButton = {
-                TextButton(
+                Button(
                     onClick = {
-                        val parsed = inputLimitText.toDoubleOrNull()
-                        if (parsed != null && parsed > 0) {
-                            onUpdateCategoryBudget(cat.title, parsed)
+                        val newB = inputBudget.toDoubleOrNull() ?: (categoryBudgets[cat.name] ?: cat.defaultMonthlyBudget)
+                        if (newB >= 0) {
+                            onSetCategoryBudget(cat.name, newB)
                             editingCategory = null
                         }
-                    }
+                    },
+                    shape = RoundedCornerShape(10.dp)
                 ) {
-                    Text("保存")
+                    Text("保存设置")
                 }
             },
             dismissButton = {
-                TextButton(onClick = { editingCategory = null }) {
+                OutlinedButton(
+                    onClick = { editingCategory = null },
+                    shape = RoundedCornerShape(10.dp)
+                ) {
                     Text("取消")
                 }
             }

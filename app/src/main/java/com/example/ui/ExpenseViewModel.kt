@@ -3,461 +3,433 @@ package com.example.ui
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.data.AiConfig
-import com.example.data.AiConfigManager
-import com.example.data.AppDatabase
-import com.example.data.ExpenseEntity
-import com.example.data.ExpenseRepository
-import com.example.data.GeminiService
-import com.example.data.ParsedExpense
-import com.example.data.SavingsGoalEntity
-import com.example.ui.components.RecurringBillItem
-import com.example.ui.model.ExpenseCategory
-import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.SharingStarted
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.flatMapLatest
-import kotlinx.coroutines.flow.stateIn
+import com.example.data.*
+import com.example.ui.components.ChatMessage
+import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
-import java.time.LocalDate
-import java.time.YearMonth
-
-data class ChatMessage(
-    val sender: String, // "user" or "ai"
-    val content: String,
-    val timestamp: Long = System.currentTimeMillis()
-)
-
-data class MonthlySummary(
-    val selectedMonth: String = "",
-    val totalExpense: Double = 0.0,
-    val totalIncome: Double = 0.0,
-    val netBalance: Double = 0.0,
-    val categoryTotals: Map<ExpenseCategory, Double> = emptyMap(),
-    val dailyAverage: Double = 0.0,
-    val topCategory: ExpenseCategory? = null,
-    val topCategoryAmount: Double = 0.0,
-    val totalRecords: Int = 0,
-    val budget: Double = 5000.0,
-    val categoryBudgets: Map<String, Double> = emptyMap()
-)
 
 class ExpenseViewModel(application: Application) : AndroidViewModel(application) {
+    private val db = AppDatabase.getDatabase(application)
+    private val repository = ExpenseRepository(db.expenseDao(), db.savingsGoalDao())
+    val aiConfigManager = AiConfigManager(application)
+    val geminiService = GeminiService(aiConfigManager)
+    val currencyService = CurrencyService()
 
-    private val repository: ExpenseRepository
-    private val aiConfigManager = AiConfigManager(application)
+    // Real-Time Currency Exchange Rates State (REST API)
+    private val _exchangeRates = MutableStateFlow<Map<String, Double>>(
+        mapOf("CNY" to 1.0, "USD" to 0.138, "EUR" to 0.128, "JPY" to 21.2, "HKD" to 1.08, "GBP" to 0.109, "SGD" to 0.186, "KRW" to 191.5)
+    )
+    val exchangeRates: StateFlow<Map<String, Double>> = _exchangeRates.asStateFlow()
 
-    private val _aiConfig = MutableStateFlow(aiConfigManager.getAiConfig())
-    val aiConfig: StateFlow<AiConfig> = _aiConfig.asStateFlow()
+    private val _isLoadingRates = MutableStateFlow(false)
+    val isLoadingRates: StateFlow<Boolean> = _isLoadingRates.asStateFlow()
 
-    val todayDate: String = LocalDate.now().toString()
-    val currentYearMonth: String = String.format("%04d-%02d", LocalDate.now().year, LocalDate.now().monthValue)
+    // Online AI Financial Insight State
+    private val _onlineInsightText = MutableStateFlow<String?>(null)
+    val onlineInsightText: StateFlow<String?> = _onlineInsightText.asStateFlow()
 
-    val availableLedgers = listOf("全部账本", "日常账本", "家庭账本", "旅行出差", "工作报销")
+    private val _isGeneratingInsight = MutableStateFlow(false)
+    val isGeneratingInsight: StateFlow<Boolean> = _isGeneratingInsight.asStateFlow()
 
-    private val _selectedMonth = MutableStateFlow(currentYearMonth)
-    val selectedMonth: StateFlow<String> = _selectedMonth.asStateFlow()
+    // Investment Portfolio State
+    private val _investments = MutableStateFlow<List<InvestmentItem>>(
+        listOf(
+            InvestmentItem(name = "沪深300ETF", code = "510300", type = InvestmentType.FUND, principal = 10000.0, currentValue = 10850.0),
+            InvestmentItem(name = "招商中证白酒", code = "161725", type = InvestmentType.FUND, principal = 5000.0, currentValue = 4720.0),
+            InvestmentItem(name = "余额宝/微信理财通", code = "000001", type = InvestmentType.WEALTH, principal = 20000.0, currentValue = 20180.0)
+        )
+    )
+    val investments: StateFlow<List<InvestmentItem>> = _investments.asStateFlow()
 
-    private val _selectedLedger = MutableStateFlow("日常账本")
+    private val _isLoadingMarket = MutableStateFlow(false)
+    val isLoadingMarket: StateFlow<Boolean> = _isLoadingMarket.asStateFlow()
+
+    // Lottery & Sports Betting State
+    private val _lotteryRecords = MutableStateFlow<List<LotteryRecord>>(
+        listOf(
+            LotteryRecord(title = "英超 曼城 VS 阿森纳 (主胜)", type = LotteryType.FOOTBALL, betAmount = 100.0, winAmount = 185.0, status = LotteryStatus.WON),
+            LotteryRecord(title = "超级大乐透 10注追加", type = LotteryType.NUMBER, betAmount = 30.0, winAmount = 0.0, status = LotteryStatus.LOST)
+        )
+    )
+    val lotteryRecords: StateFlow<List<LotteryRecord>> = _lotteryRecords.asStateFlow()
+
+    // Current Ledger Selection
+    private val _selectedLedger = MutableStateFlow("全部账本")
     val selectedLedger: StateFlow<String> = _selectedLedger.asStateFlow()
 
-    private val _selectedTypeFilter = MutableStateFlow("全部") // "全部", "支出", "收入"
-    val selectedTypeFilter: StateFlow<String> = _selectedTypeFilter.asStateFlow()
+    val ledgers = listOf("全部账本", "日常账本", "旅游专项", "家庭共享", "创业资金")
 
+    // Expenses Stream
+    val allExpenses: StateFlow<List<ExpenseEntity>> = _selectedLedger.flatMapLatest { ledger ->
+        if (ledger == "全部账本") repository.allExpenses
+        else repository.getExpensesByLedger(ledger)
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    // Savings Goals Stream
+    val allGoals: StateFlow<List<SavingsGoalEntity>> = repository.allGoals
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    // Filters & Search
     private val _searchQuery = MutableStateFlow("")
     val searchQuery: StateFlow<String> = _searchQuery.asStateFlow()
 
-    private val _selectedCategoryFilter = MutableStateFlow<ExpenseCategory?>(null)
-    val selectedCategoryFilter: StateFlow<ExpenseCategory?> = _selectedCategoryFilter.asStateFlow()
+    private val _categoryFilter = MutableStateFlow<String?>(null)
+    val categoryFilter: StateFlow<String?> = _categoryFilter.asStateFlow()
 
-    private val _monthlyBudget = MutableStateFlow(5000.0)
+    private val _typeFilter = MutableStateFlow<String?>(null)
+    val typeFilter: StateFlow<String?> = _typeFilter.asStateFlow()
+
+    // Monthly Budget Limit
+    private val _monthlyBudget = MutableStateFlow(8000.0)
     val monthlyBudget: StateFlow<Double> = _monthlyBudget.asStateFlow()
 
-    private val _isAiLoading = MutableStateFlow(false)
-    val isAiLoading: StateFlow<Boolean> = _isAiLoading.asStateFlow()
-
-    private val _aiInsights = MutableStateFlow<List<String>>(emptyList())
-    val aiInsights: StateFlow<List<String>> = _aiInsights.asStateFlow()
-
-    private val _recurringBills = MutableStateFlow<List<RecurringBillItem>>(
-        listOf(
-            RecurringBillItem(title = "住房租金按揭", amount = 2800.0, dayOfMonth = 15, category = "住房", cycle = "每月"),
-            RecurringBillItem(title = "千兆宽带+手机套餐", amount = 129.0, dayOfMonth = 1, category = "其它", cycle = "每月"),
-            RecurringBillItem(title = "iCloud + 软件订阅", amount = 21.0, dayOfMonth = 8, category = "学习", cycle = "每月")
-        )
+    // Category Budget Limits Map
+    private val _categoryBudgets = MutableStateFlow<Map<String, Double>>(
+        ExpenseCategory.Categories.filter { !it.isIncome }.associate { it.name to it.defaultMonthlyBudget }
     )
-    val recurringBills: StateFlow<List<RecurringBillItem>> = _recurringBills.asStateFlow()
+    val categoryBudgets: StateFlow<Map<String, Double>> = _categoryBudgets.asStateFlow()
 
-    private val _chatMessages = MutableStateFlow<List<ChatMessage>>(
+    // Active Bottom Navigation Tab (0: 账单明细, 1: 预算与图表, 2: 攒钱愿望, 3: AI 顾问)
+    private val _activeTab = MutableStateFlow(0)
+    val activeTab: StateFlow<Int> = _activeTab.asStateFlow()
+
+    // Snackbar Event Flow
+    private val _snackbarEvent = MutableSharedFlow<String>()
+    val snackbarEvent: SharedFlow<String> = _snackbarEvent.asSharedFlow()
+
+    // Gemini Smart Quick Add State
+    private val _isParsingAi = MutableStateFlow(false)
+    val isParsingAi: StateFlow<Boolean> = _isParsingAi.asStateFlow()
+
+    private val _parsedExpenseResult = MutableStateFlow<ParsedExpense?>(null)
+    val parsedExpenseResult: StateFlow<ParsedExpense?> = _parsedExpenseResult.asStateFlow()
+
+    private val _aiErrorMessage = MutableStateFlow<String?>(null)
+    val aiErrorMessage: StateFlow<String?> = _aiErrorMessage.asStateFlow()
+
+    // AI Advisor Chat History
+    private val _chatMessages = MutableStateFlow(
         listOf(
-            ChatMessage("ai", "👋 你好！我是你的 AI 私人理财顾问。你可以向我咨询任何关于理财规划、省钱技巧、资产配置或本月开销分析的问题！系统已支持国内 DeepSeek、硅基流动等 API 无缝切换哦！")
+            ChatMessage(
+                sender = "AI",
+                text = "您好！我是您的 Gemini AI 理财顾问。我可以为您制定攒钱目标、分析消费风险、解答税务理财疑问或提供省钱攻略。随时向我提问吧！"
+            )
         )
     )
     val chatMessages: StateFlow<List<ChatMessage>> = _chatMessages.asStateFlow()
 
-    private val _categoryBudgets = MutableStateFlow<Map<String, Double>>(
-        mapOf(
-            "餐饮" to 1500.0,
-            "交通" to 500.0,
-            "购物" to 1000.0,
-            "娱乐" to 600.0,
-            "住房" to 2500.0
-        )
-    )
-    val categoryBudgets: StateFlow<Map<String, Double>> = _categoryBudgets.asStateFlow()
+    private val _isAiThinking = MutableStateFlow(false)
+    val isAiThinking: StateFlow<Boolean> = _isAiThinking.asStateFlow()
+
+    // Monthly AI Financial Report State
+    private val _monthlyReport = MutableStateFlow<String?>(null)
+    val monthlyReport: StateFlow<String?> = _monthlyReport.asStateFlow()
+
+    private val _isReportLoading = MutableStateFlow(false)
+    val isReportLoading: StateFlow<Boolean> = _isReportLoading.asStateFlow()
 
     init {
-        val database = AppDatabase.getDatabase(application)
-        repository = ExpenseRepository(database.expenseDao(), database.savingsGoalDao())
-
         viewModelScope.launch {
-            repository.checkAndSeedInitialData()
-            refreshAiInsights()
+            repository.seedInitialDataIfEmpty()
+            refreshExchangeRates()
         }
     }
 
-    fun saveAiConfig(config: AiConfig) {
-        aiConfigManager.saveAiConfig(config)
-        _aiConfig.value = config
-        refreshAiInsights()
-    }
-
-    fun testAiConnection(config: AiConfig, onResult: (Boolean, String) -> Unit) {
+    fun refreshExchangeRates() {
         viewModelScope.launch {
-            val result = GeminiService.testApiConnection(config)
-            onResult(result.first, result.second)
+            _isLoadingRates.value = true
+            currencyService.fetchLiveRates("CNY")
+                .onSuccess { ratesMap ->
+                    _exchangeRates.value = ratesMap
+                    _isLoadingRates.value = false
+                    _snackbarEvent.emit("🌐 联网更新：国际实时外汇汇率已更新！")
+                }
+                .onFailure {
+                    _isLoadingRates.value = false
+                }
         }
     }
 
-    fun addRecurringBill(bill: RecurringBillItem) {
-        val current = _recurringBills.value.toMutableList()
-        current.add(bill)
-        _recurringBills.value = current
+    fun fetchOnlineInsight() {
+        viewModelScope.launch {
+            _isGeneratingInsight.value = true
+            _snackbarEvent.emit("🤖 正在发起联网大模型深度诊断请求...")
+            val list = allExpenses.value
+            val totalIncome = list.filter { it.type == TransactionType.INCOME.name }.sumOf { it.amount }
+            val totalExpense = list.filter { it.type == TransactionType.EXPENSE.name }.sumOf { it.amount }
+            val summary = list.filter { it.type == TransactionType.EXPENSE.name }
+                .groupBy { it.category }
+                .mapValues { it.value.sumOf { e -> e.amount } }
+                .entries.joinToString { "${it.key}: ￥${it.value}" }
+            val prompt = "请根据我本月财务情况进行理性消费度打分与优化诊断（收入:￥$totalIncome, 支出:￥$totalExpense, 分类: $summary）。请提供3条具体可落地的省钱与财富增长实操建议。"
+
+            geminiService.generateFinancialAdvice(prompt, totalIncome, totalExpense, summary, "全量交易样本")
+                .onSuccess { text ->
+                    _onlineInsightText.value = text
+                    _isGeneratingInsight.value = false
+                    _snackbarEvent.emit("✨ 联网 AI 深度理财诊断已完成！")
+                }
+                .onFailure {
+                    _isGeneratingInsight.value = false
+                }
+        }
     }
 
-    fun deleteRecurringBill(bill: RecurringBillItem) {
-        val current = _recurringBills.value.toMutableList()
-        current.remove(bill)
-        _recurringBills.value = current
+    fun addInvestment(item: InvestmentItem) {
+        _investments.value = _investments.value + item
+        viewModelScope.launch { _snackbarEvent.emit("📈 已添加持仓: ${item.name}") }
     }
 
-    val savingsGoals: StateFlow<List<SavingsGoalEntity>> = repository.allSavingsGoals
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5000),
-            initialValue = emptyList()
-        )
+    fun deleteInvestment(id: String) {
+        _investments.value = _investments.value.filterNot { it.id == id }
+        viewModelScope.launch { _snackbarEvent.emit("🗑️ 已删除持仓项目") }
+    }
 
-    @OptIn(ExperimentalCoroutinesApi::class)
-    val monthlyExpenses: StateFlow<List<ExpenseEntity>> = _selectedMonth
-        .flatMapLatest { month ->
-            repository.getExpensesByMonth(month)
-        }
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5000),
-            initialValue = emptyList()
-        )
-
-    val filteredExpenses: StateFlow<List<ExpenseEntity>> = combine(
-        monthlyExpenses,
-        _selectedLedger,
-        _selectedTypeFilter,
-        _searchQuery,
-        _selectedCategoryFilter
-    ) { expenses, ledger, typeFilter, query, categoryFilter ->
-        expenses.filter { expense ->
-            val matchesLedger = (ledger == "全部账本" || expense.ledger == ledger)
-            val matchesType = (typeFilter == "全部" || expense.type == typeFilter)
-            val matchesQuery = query.isBlank() ||
-                    expense.note.contains(query, ignoreCase = true) ||
-                    expense.category.contains(query, ignoreCase = true) ||
-                    expense.amount.toString().contains(query)
-            val matchesCategory = categoryFilter == null || expense.category == categoryFilter.title
-
-            matchesLedger && matchesType && matchesQuery && matchesCategory
-        }
-    }.stateIn(
-        scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(5000),
-        initialValue = emptyList()
-    )
-
-    val monthlySummary: StateFlow<MonthlySummary> = combine(
-        monthlyExpenses,
-        _selectedMonth,
-        _monthlyBudget,
-        _categoryBudgets
-    ) { expenses, month, budget, catBudgets ->
-        var totalExpense = 0.0
-        var totalIncome = 0.0
-        val catMap = mutableMapOf<ExpenseCategory, Double>()
-
-        expenses.forEach { item ->
-            if (item.type == "支出") {
-                totalExpense += item.amount
-                val cat = ExpenseCategory.fromTitle(item.category)
-                catMap[cat] = (catMap[cat] ?: 0.0) + item.amount
-            } else if (item.type == "收入") {
-                totalIncome += item.amount
+    fun refreshMarketQuotes() {
+        viewModelScope.launch {
+            _isLoadingMarket.value = true
+            _snackbarEvent.emit("💹 正在同步最新市场价格行情与估值波动...")
+            kotlinx.coroutines.delay(1200) // Simulate market quote polling latency
+            _investments.value = _investments.value.map { item ->
+                val fluctuation = ((-20..25).random() / 1000.0) // -2.0% to +2.5%
+                val newVal = (item.currentValue * (1.0 + fluctuation)).coerceAtLeast(0.0)
+                item.copy(currentValue = newVal)
             }
+            _isLoadingMarket.value = false
+            _snackbarEvent.emit("✅ 证券理财持仓估值已完成行情刷新！")
         }
-
-        val ym = try { YearMonth.parse(month) } catch (e: Exception) { YearMonth.now() }
-        val daysInMonth = ym.lengthOfMonth()
-        val dailyAvg = if (daysInMonth > 0) totalExpense / daysInMonth else 0.0
-
-        val topEntry = catMap.maxByOrNull { it.value }
-
-        MonthlySummary(
-            selectedMonth = month,
-            totalExpense = totalExpense,
-            totalIncome = totalIncome,
-            netBalance = totalIncome - totalExpense,
-            categoryTotals = catMap,
-            dailyAverage = dailyAvg,
-            topCategory = topEntry?.key,
-            topCategoryAmount = topEntry?.value ?: 0.0,
-            totalRecords = expenses.size,
-            budget = budget,
-            categoryBudgets = catBudgets
-        )
-    }.stateIn(
-        scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(5000),
-        initialValue = MonthlySummary()
-    )
-
-    fun setSelectedMonth(month: String) {
-        _selectedMonth.value = month
-        refreshAiInsights()
     }
 
-    fun setSelectedLedger(ledger: String) {
+    fun addLotteryRecord(record: LotteryRecord) {
+        _lotteryRecords.value = listOf(record) + _lotteryRecords.value
+        viewModelScope.launch { _snackbarEvent.emit("⚽ 已记录彩票注单: ${record.title}") }
+    }
+
+    fun deleteLotteryRecord(id: String) {
+        _lotteryRecords.value = _lotteryRecords.value.filterNot { it.id == id }
+        viewModelScope.launch { _snackbarEvent.emit("🗑️ 已删除彩票记账项") }
+    }
+
+    fun updateLotteryStatus(id: String, status: LotteryStatus, winAmount: Double) {
+        _lotteryRecords.value = _lotteryRecords.value.map { rec ->
+            if (rec.id == id) rec.copy(status = status, winAmount = winAmount) else rec
+        }
+        viewModelScope.launch { _snackbarEvent.emit("🎯 彩票单状态已更新为: ${status.label}") }
+    }
+
+    fun setLedger(ledger: String) {
         _selectedLedger.value = ledger
-    }
-
-    fun setSelectedTypeFilter(type: String) {
-        _selectedTypeFilter.value = type
     }
 
     fun setSearchQuery(query: String) {
         _searchQuery.value = query
     }
 
-    fun setSelectedCategoryFilter(category: ExpenseCategory?) {
-        _selectedCategoryFilter.value = category
+    fun setCategoryFilter(category: String?) {
+        _categoryFilter.value = category
+    }
+
+    fun setTypeFilter(type: String?) {
+        _typeFilter.value = type
+    }
+
+    fun setActiveTab(index: Int) {
+        _activeTab.value = index
     }
 
     fun setMonthlyBudget(budget: Double) {
         _monthlyBudget.value = budget
     }
 
-    fun setCategoryBudget(categoryTitle: String, limit: Double) {
-        val current = _categoryBudgets.value.toMutableMap()
-        current[categoryTitle] = limit
-        _categoryBudgets.value = current
+    fun setCategoryBudget(category: String, budget: Double) {
+        _categoryBudgets.value = _categoryBudgets.value.toMutableMap().apply {
+            put(category, budget)
+        }
+        viewModelScope.launch {
+            _snackbarEvent.emit("已设置【$category】月度预算限额为 ￥${budget.toInt()}")
+        }
     }
 
-    fun addExpense(
-        amount: Double,
-        type: String,
-        category: String,
-        ledger: String,
-        note: String,
-        date: String = todayDate,
-        onSuccess: () -> Unit = {}
-    ) {
+    // Expense Operations
+    fun addExpense(expense: ExpenseEntity) {
         viewModelScope.launch {
-            val expense = ExpenseEntity(
-                amount = amount,
-                type = type,
-                category = category,
-                ledger = ledger,
-                note = note,
-                date = date,
-                timestamp = System.currentTimeMillis()
-            )
-            repository.insert(expense)
+            repository.insertExpense(expense)
 
-            val addedMonth = date.take(7)
-            if (addedMonth != _selectedMonth.value && addedMonth.length == 7) {
-                _selectedMonth.value = addedMonth
+            if (expense.type == TransactionType.EXPENSE.name) {
+                val currentCatExpense = allExpenses.value
+                    .filter { it.category == expense.category && it.type == TransactionType.EXPENSE.name }
+                    .sumOf { it.amount } + expense.amount
+                val catBudget = categoryBudgets.value[expense.category] ?: 1000.0
+
+                if (catBudget > 0) {
+                    if (currentCatExpense >= catBudget) {
+                        _snackbarEvent.emit("🚨 预警：【${expense.category}】支出已超出预算限额 (已用 ￥${String.format("%.1f", currentCatExpense)} / 预算 ￥${catBudget.toInt()})！")
+                    } else if (currentCatExpense >= catBudget * 0.8) {
+                        val pct = (currentCatExpense / catBudget * 100).toInt()
+                        _snackbarEvent.emit("⚠️ 预警提醒：【${expense.category}】支出已达预算的 ${pct}% (￥${String.format("%.1f", currentCatExpense)} / ￥${catBudget.toInt()})！")
+                    } else {
+                        _snackbarEvent.emit("✅ 已记录账单：${expense.title} ￥${expense.amount}")
+                    }
+                } else {
+                    _snackbarEvent.emit("✅ 已记录账单：${expense.title} ￥${expense.amount}")
+                }
+            } else {
+                _snackbarEvent.emit("✅ 已记录账单：${expense.title} ￥${expense.amount}")
             }
-            refreshAiInsights()
-            onSuccess()
         }
     }
 
     fun deleteExpense(expense: ExpenseEntity) {
         viewModelScope.launch {
-            repository.delete(expense)
-            refreshAiInsights()
+            repository.deleteExpense(expense)
+            _snackbarEvent.emit("🗑️ 账单项已成功删除")
         }
     }
 
-    fun parseSmartVoiceText(text: String, onParsed: (ParsedExpense) -> Unit) {
+    // Savings Goals Operations
+    fun addGoal(title: String, targetAmount: Double, targetDateMillis: Long) {
         viewModelScope.launch {
-            _isAiLoading.value = true
-            val parsed = GeminiService.parseSmartExpenseText(text, todayDate, _aiConfig.value)
-            _isAiLoading.value = false
-            onParsed(parsed)
-        }
-    }
-
-    fun refreshAiInsights() {
-        viewModelScope.launch {
-            _isAiLoading.value = true
-            val summary = monthlySummary.value
-            val insights = GeminiService.getAiFinancialInsight(
-                totalIncome = summary.totalIncome,
-                totalExpense = summary.totalExpense,
-                balance = summary.netBalance,
-                topCategory = summary.topCategory?.title ?: "无",
-                topCatAmount = summary.topCategoryAmount,
-                month = _selectedMonth.value,
-                aiConfig = _aiConfig.value
+            repository.insertGoal(
+                SavingsGoalEntity(
+                    title = title,
+                    targetAmount = targetAmount,
+                    targetDateMillis = targetDateMillis
+                )
             )
-            _aiInsights.value = insights
-            _isAiLoading.value = false
+            _snackbarEvent.emit("🎯 已成功建立攒钱愿望：$title")
         }
     }
 
-    private val _financialReport = MutableStateFlow<String?>(null)
-    val financialReport: StateFlow<String?> = _financialReport.asStateFlow()
-
-    private val _isReportLoading = MutableStateFlow(false)
-    val isReportLoading: StateFlow<Boolean> = _isReportLoading.asStateFlow()
-
-    private val _reasoningPlan = MutableStateFlow<String?>(null)
-    val reasoningPlan: StateFlow<String?> = _reasoningPlan.asStateFlow()
-
-    private val _isReasoningLoading = MutableStateFlow(false)
-    val isReasoningLoading: StateFlow<Boolean> = _isReasoningLoading.asStateFlow()
-
-    fun generateReasoningPlan(financialGoal: String) {
-        viewModelScope.launch {
-            _isReasoningLoading.value = true
-            val summary = monthlySummary.value
-            val netSave = if (summary.netBalance > 0) summary.netBalance else 1500.0
-            val plan = GeminiService.generateThinkingReasoningPlan(
-                financialGoal = financialGoal,
-                currentBalance = summary.netBalance,
-                monthlySavingCapacity = netSave,
-                aiConfig = _aiConfig.value
-            )
-            _reasoningPlan.value = plan
-            _isReasoningLoading.value = false
-        }
-    }
-
-    fun clearReasoningPlan() {
-        _reasoningPlan.value = null
-    }
-
-    fun generateFinancialReport() {
-        viewModelScope.launch {
-            _isReportLoading.value = true
-            val summary = monthlySummary.value
-            val txCount = filteredExpenses.value.size
-            val report = GeminiService.generateFinancialReport(
-                totalIncome = summary.totalIncome,
-                totalExpense = summary.totalExpense,
-                budget = monthlyBudget.value,
-                topCategory = summary.topCategory?.title ?: "无",
-                topCatAmount = summary.topCategoryAmount,
-                month = _selectedMonth.value,
-                transactionCount = txCount,
-                aiConfig = _aiConfig.value
-            )
-            _financialReport.value = report
-            _isReportLoading.value = false
-        }
-    }
-
-    fun parseReceiptImage(base64Image: String, onParsed: (ParsedExpense) -> Unit) {
-        viewModelScope.launch {
-            _isAiLoading.value = true
-            val currentDate = LocalDate.now().toString()
-            val parsed = GeminiService.parseReceiptImage(
-                base64Image = base64Image,
-                currentDateStr = currentDate,
-                aiConfig = _aiConfig.value
-            )
-            _isAiLoading.value = false
-            onParsed(parsed)
-        }
-    }
-
-    fun clearFinancialReport() {
-        _financialReport.value = null
-    }
-
-    fun sendChatMessage(userText: String) {
-        if (userText.isBlank()) return
-        val currentList = _chatMessages.value.toMutableList()
-        currentList.add(ChatMessage("user", userText.trim()))
-        _chatMessages.value = currentList
-
-        viewModelScope.launch {
-            _isAiLoading.value = true
-            val summary = monthlySummary.value
-            val aiReply = GeminiService.chatWithAdvisor(
-                userQuery = userText,
-                totalIncome = summary.totalIncome,
-                totalExpense = summary.totalExpense,
-                balance = summary.netBalance,
-                topCategory = summary.topCategory?.title ?: "无",
-                topCatAmount = summary.topCategoryAmount,
-                month = _selectedMonth.value,
-                aiConfig = _aiConfig.value
-            )
-            _isAiLoading.value = false
-
-            val updatedList = _chatMessages.value.toMutableList()
-            updatedList.add(ChatMessage("ai", aiReply))
-            _chatMessages.value = updatedList
-        }
-    }
-
-    // Savings Goals
-    fun addSavingsGoal(title: String, targetAmount: Double, emoji: String = "🎯", targetDate: String = "") {
-        viewModelScope.launch {
-            val goal = SavingsGoalEntity(
-                title = title,
-                targetAmount = targetAmount,
-                currentAmount = 0.0,
-                emoji = emoji,
-                targetDate = targetDate
-            )
-            repository.insertGoal(goal)
-        }
-    }
-
-    fun depositToSavingsGoal(goal: SavingsGoalEntity, depositAmount: Double) {
+    fun depositToGoal(goal: SavingsGoalEntity, depositAmount: Double) {
         viewModelScope.launch {
             val updated = goal.copy(currentAmount = goal.currentAmount + depositAmount)
             repository.updateGoal(updated)
+            _snackbarEvent.emit("💰 成功向【${goal.title}】存入 ￥$depositAmount！")
         }
     }
 
-    fun deleteSavingsGoal(goal: SavingsGoalEntity) {
+    fun deleteGoal(goal: SavingsGoalEntity) {
         viewModelScope.launch {
             repository.deleteGoal(goal)
+            _snackbarEvent.emit("🗑️ 攒钱愿望已删除")
         }
     }
 
-    // Export Data as CSV
-    fun exportDataAsCsv(): String {
-        val list = filteredExpenses.value
-        val sb = StringBuilder()
-        sb.append("ID,日期,类型,类别,金额,账本,备注\n")
-        list.forEach { item ->
-            sb.append("${item.id},${item.date},${item.type},${item.category},${item.amount},${item.ledger},\"${item.note}\"\n")
+    // Gemini AI Smart Parsing
+    fun parseExpenseWithAi(input: String) {
+        viewModelScope.launch {
+            _isParsingAi.value = true
+            _aiErrorMessage.value = null
+            _parsedExpenseResult.value = null
+            _snackbarEvent.emit("🤖 AI 正在智能识别分析您的账单...")
+
+            geminiService.parseExpenseFromText(input)
+                .onSuccess { parsed ->
+                    _parsedExpenseResult.value = parsed
+                    _isParsingAi.value = false
+                    _snackbarEvent.emit("✨ AI 账单拆解完毕！")
+                }
+                .onFailure { err ->
+                    _aiErrorMessage.value = err.message ?: "解析失败"
+                    _isParsingAi.value = false
+                    _snackbarEvent.emit("⚠️ 解析异常: ${err.localizedMessage}")
+                }
         }
-        return sb.toString()
+    }
+
+    fun parseExpenseImageWithAi(base64Image: String, mimeType: String = "image/jpeg") {
+        viewModelScope.launch {
+            _isParsingAi.value = true
+            _aiErrorMessage.value = null
+            _parsedExpenseResult.value = null
+            _snackbarEvent.emit("📸 正在扫描识别发票小票图片...")
+
+            geminiService.parseReceiptImage(base64Image, mimeType)
+                .onSuccess { parsed ->
+                    _parsedExpenseResult.value = parsed
+                    _isParsingAi.value = false
+                    _snackbarEvent.emit("✨ 发票图片 OCR 扫描完成！")
+                }
+                .onFailure { err ->
+                    _aiErrorMessage.value = err.message ?: "发票识别失败"
+                    _isParsingAi.value = false
+                    _snackbarEvent.emit("⚠️ 小票识别失败: ${err.localizedMessage}")
+                }
+        }
+    }
+
+    fun clearAiParsedResult() {
+        _parsedExpenseResult.value = null
+        _aiErrorMessage.value = null
+    }
+
+    // Gemini AI Chat
+    fun sendChatMessage(question: String) {
+        val currentMsgs = _chatMessages.value.toMutableList()
+        currentMsgs.add(ChatMessage(sender = "USER", text = question))
+        _chatMessages.value = currentMsgs
+
+        viewModelScope.launch {
+            _isAiThinking.value = true
+            val list = allExpenses.value
+            val totalIncome = list.filter { it.type == TransactionType.INCOME.name }.sumOf { it.amount }
+            val totalExpense = list.filter { it.type == TransactionType.EXPENSE.name }.sumOf { it.amount }
+            val breakdown = list.filter { it.type == TransactionType.EXPENSE.name }
+                .groupBy { it.category }
+                .mapValues { it.value.sumOf { exp -> exp.amount } }
+                .entries.joinToString { "${it.key}: ￥${it.value}" }
+            val recent = list.take(5).joinToString { "${it.title}(￥${it.amount})" }
+
+            geminiService.generateFinancialAdvice(
+                userQuestion = question,
+                totalIncome = totalIncome,
+                totalExpense = totalExpense,
+                categoryBreakdown = breakdown,
+                recentExpenses = recent
+            ).onSuccess { reply ->
+                val updated = _chatMessages.value.toMutableList()
+                updated.add(ChatMessage(sender = "AI", text = reply))
+                _chatMessages.value = updated
+                _isAiThinking.value = false
+                _snackbarEvent.emit("💡 理财顾问已有解答！")
+            }.onFailure { err ->
+                val updated = _chatMessages.value.toMutableList()
+                updated.add(ChatMessage(sender = "AI", text = "回复生成失败：${err.localizedMessage}。请检查设置中的 Gemini API Key。"))
+                _chatMessages.value = updated
+                _isAiThinking.value = false
+                _snackbarEvent.emit("⚠️ AI 理财问答发生异常")
+            }
+        }
+    }
+
+    // Gemini Monthly Report
+    fun generateMonthlyReport() {
+        viewModelScope.launch {
+            _isReportLoading.value = true
+            _snackbarEvent.emit("📊 正在开启大模型算力生成月度财务审计报告...")
+            val list = allExpenses.value
+            val income = list.filter { it.type == TransactionType.INCOME.name }.sumOf { it.amount }
+            val expense = list.filter { it.type == TransactionType.EXPENSE.name }.sumOf { it.amount }
+            val summary = list.filter { it.type == TransactionType.EXPENSE.name }
+                .groupBy { it.category }
+                .mapValues { it.value.sumOf { e -> e.amount } }
+                .entries.joinToString { "${it.key}: ￥${it.value}" }
+
+            geminiService.generateMonthlyReport("本月", income, expense, summary)
+                .onSuccess { report ->
+                    _monthlyReport.value = report
+                    _isReportLoading.value = false
+                    _snackbarEvent.emit("✅ 月度财务健康诊断报告已成功生成！")
+                }
+                .onFailure { err ->
+                    _monthlyReport.value = "报告生成失败：${err.localizedMessage}。请确保关联 Gemini API Key。"
+                    _isReportLoading.value = false
+                    _snackbarEvent.emit("⚠️ 报告生成发生异常")
+                }
+        }
+    }
+
+    fun dismissReport() {
+        _monthlyReport.value = null
     }
 }

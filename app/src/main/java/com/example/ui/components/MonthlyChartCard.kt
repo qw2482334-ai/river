@@ -1,219 +1,230 @@
 package com.example.ui.components
 
-import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.Divider
-import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.remember
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.ui.MonthlySummary
-import com.example.ui.model.ExpenseCategory
+import com.example.data.ExpenseCategory
+import com.example.data.ExpenseEntity
+import com.example.data.TransactionType
+import com.example.ui.theme.ExpenseRed
+import com.example.ui.theme.IncomeGreen
+import java.text.SimpleDateFormat
+import java.util.*
 
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun MonthlyChartCard(
-    summary: MonthlySummary,
+    expenses: List<ExpenseEntity>,
     modifier: Modifier = Modifier
 ) {
-    val totalAmount = summary.totalExpense
-    val categoryTotals = summary.categoryTotals
-    val animationProgress = remember { Animatable(0f) }
+    var selectedChartType by remember { mutableStateOf(0) } // 0: 支出结构, 1: 趋势对比
 
-    LaunchedEffect(summary.selectedMonth, totalAmount) {
-        animationProgress.snapTo(0f)
-        animationProgress.animateTo(
-            targetValue = 1f,
-            animationSpec = tween(durationMillis = 800)
-        )
-    }
+    // Group expenses by category
+    val expenseList = expenses.filter { it.type == TransactionType.EXPENSE.name }
+    val totalExpense = expenseList.sumOf { it.amount }
+
+    val categoryTotals = expenseList
+        .groupBy { it.category }
+        .mapValues { entry -> entry.value.sumOf { it.amount } }
+        .toList()
+        .sortedByDescending { it.second }
 
     Card(
-        modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(28.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = Color(0xFFEADDFF)
-        ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+        modifier = modifier
+            .fillMaxWidth()
+            .testTag("monthly_chart_card"),
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
     ) {
-        Column(
-            modifier = Modifier.padding(20.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
+        Column(modifier = Modifier.padding(18.dp)) {
+            // Header Toggle
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Column {
-                    Text(
-                        text = "月度开销总结",
-                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                        color = Color(0xFF21005D)
-                    )
-                    Text(
-                        text = "共记录 ${summary.totalRecords} 笔支出",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = Color(0xFF49454F)
-                    )
-                }
+                Text(
+                    text = "图表与支出分析",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
 
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(16.dp))
-                        .background(Color(0xFFD0BCFF))
-                        .padding(horizontal = 10.dp, vertical = 6.dp)
-                ) {
-                    Text(
-                        text = "日均 ￥${String.format("%.1f", summary.dailyAverage)}",
-                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
-                        color = Color(0xFF21005D)
-                    )
+                SingleChoiceSegmentedButtonRow {
+                    SegmentedButton(
+                        selected = selectedChartType == 0,
+                        onClick = { selectedChartType = 0 },
+                        shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2)
+                    ) {
+                        Text("分类占比", fontSize = 12.sp)
+                    }
+                    SegmentedButton(
+                        selected = selectedChartType == 1,
+                        onClick = { selectedChartType = 1 },
+                        shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2)
+                    ) {
+                        Text("七日趋势", fontSize = 12.sp)
+                    }
                 }
             }
 
-            Spacer(modifier = Modifier.height(20.dp))
+            Spacer(modifier = Modifier.height(16.dp))
 
-            if (totalAmount <= 0 || categoryTotals.isEmpty()) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(160.dp)
-                        .background(
-                            color = Color.White.copy(alpha = 0.6f),
-                            shape = RoundedCornerShape(20.dp)
-                        ),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(
-                            text = "🍃",
-                            fontSize = 36.sp
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text(
-                            text = "当前月份暂无开销记录",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = Color(0xFF49454F)
-                        )
+            if (selectedChartType == 0) {
+                // Category breakdown progress bars
+                if (categoryTotals.isEmpty()) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(120.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text("暂无支出记录，快去记一笔吧~", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                } else {
+                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        categoryTotals.take(6).forEach { (catName, amount) ->
+                            val catObj = ExpenseCategory.getCategoryByName(catName)
+                            val percent = if (totalExpense > 0) (amount / totalExpense).toFloat() else 0f
+
+                            Column {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(24.dp)
+                                                .clip(RoundedCornerShape(6.dp))
+                                                .background(catObj.color.copy(alpha = 0.2f)),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Icon(
+                                                imageVector = catObj.icon,
+                                                contentDescription = null,
+                                                tint = catObj.color,
+                                                modifier = Modifier.size(14.dp)
+                                            )
+                                        }
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text(text = catName, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
+                                    }
+
+                                    Text(
+                                        text = "￥${String.format("%.2f", amount)} (${(percent * 100).toInt()}%)",
+                                        style = MaterialTheme.typography.labelMedium,
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+                                }
+
+                                Spacer(modifier = Modifier.height(6.dp))
+
+                                LinearProgressIndicator(
+                                    progress = { percent },
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(8.dp)
+                                        .clip(RoundedCornerShape(4.dp)),
+                                    color = catObj.color,
+                                    trackColor = MaterialTheme.colorScheme.surfaceVariant
+                                )
+                            }
+                        }
                     }
                 }
             } else {
-                // Donut Chart with center total
-                Box(
-                    modifier = Modifier.size(190.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Canvas(modifier = Modifier.size(170.dp)) {
-                        val strokeWidth = 26.dp.toPx()
-                        var startAngle = -90f
+                // 7-day Bar Chart
+                val last7DaysData = remember(expenses) {
+                    val cal = Calendar.getInstance()
+                    val result = mutableListOf<Pair<String, Double>>()
+                    val dayFormat = SimpleDateFormat("MM-dd", Locale.getDefault())
 
-                        val sortedEntries = categoryTotals.entries.sortedByDescending { it.value }
+                    for (i in 6 downTo 0) {
+                        val tempCal = Calendar.getInstance()
+                        tempCal.add(Calendar.DAY_OF_YEAR, -i)
+                        tempCal.set(Calendar.HOUR_OF_DAY, 0)
+                        tempCal.set(Calendar.MINUTE, 0)
+                        tempCal.set(Calendar.SECOND, 0)
+                        tempCal.set(Calendar.MILLISECOND, 0)
+                        val startMs = tempCal.timeInMillis
 
-                        sortedEntries.forEach { (category, amount) ->
-                            val sweepAngle = ((amount / totalAmount) * 360f * animationProgress.value).toFloat()
-                            drawArc(
-                                color = category.color,
-                                startAngle = startAngle,
-                                sweepAngle = sweepAngle - 3f, // gap for clean aesthetic
-                                useCenter = false,
-                                style = Stroke(width = strokeWidth, cap = StrokeCap.Round)
+                        tempCal.add(Calendar.DAY_OF_YEAR, 1)
+                        val endMs = tempCal.timeInMillis
+
+                        val dayTotal = expenses.filter {
+                            it.type == TransactionType.EXPENSE.name &&
+                                    it.dateMillis in startMs..<endMs
+                        }.sumOf { it.amount }
+
+                        result.add(Pair(dayFormat.format(Date(startMs)), dayTotal))
+                    }
+                    result
+                }
+
+                val maxVal = (last7DaysData.maxOfOrNull { it.second } ?: 100.0).coerceAtLeast(100.0)
+
+                Column {
+                    val primaryColor = MaterialTheme.colorScheme.primary
+                    val trackColor = MaterialTheme.colorScheme.surfaceVariant
+
+                    Canvas(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(140.dp)
+                    ) {
+                        val barWidth = size.width / (last7DaysData.size * 2)
+                        val maxBarHeight = size.height - 30.dp.toPx()
+
+                        last7DaysData.forEachIndexed { index, pair ->
+                            val x = (index * 2 + 0.5f) * barWidth
+                            val barHeight = ((pair.second / maxVal) * maxBarHeight).toFloat()
+                            val y = maxBarHeight - barHeight
+
+                            // Background bar
+                            drawRoundRect(
+                                color = trackColor,
+                                topLeft = Offset(x, 0f),
+                                size = Size(barWidth, maxBarHeight),
+                                cornerRadius = CornerRadius(8f, 8f)
                             )
-                            startAngle += sweepAngle
+
+                            // Active value bar
+                            if (barHeight > 0) {
+                                drawRoundRect(
+                                    color = primaryColor,
+                                    topLeft = Offset(x, y),
+                                    size = Size(barWidth, barHeight),
+                                    cornerRadius = CornerRadius(8f, 8f)
+                                )
+                            }
                         }
                     }
 
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(
-                            text = "总支出",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = Color(0xFF49454F)
-                        )
-                        Text(
-                            text = String.format("￥%.2f", totalAmount),
-                            style = MaterialTheme.typography.titleLarge.copy(
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 22.sp
-                            ),
-                            color = Color(0xFF21005D),
-                            textAlign = TextAlign.Center
-                        )
-                    }
-                }
+                    Spacer(modifier = Modifier.height(8.dp))
 
-                Spacer(modifier = Modifier.height(20.dp))
-                HorizontalDivider(color = Color(0xFFD0BCFF).copy(alpha = 0.6f))
-                Spacer(modifier = Modifier.height(16.dp))
-
-                // Category Legends
-                FlowRow(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.Start),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    categoryTotals.entries.sortedByDescending { it.value }.forEach { (category, amount) ->
-                        val percentage = (amount / totalAmount) * 100
-
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(14.dp))
-                                .background(Color.White.copy(alpha = 0.7f))
-                                .padding(horizontal = 10.dp, vertical = 6.dp)
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(10.dp)
-                                    .clip(CircleShape)
-                                    .background(category.color)
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceAround
+                    ) {
+                        last7DaysData.forEach { (dateStr, _) ->
                             Text(
-                                text = "${category.emoji} ${category.title}",
-                                style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
-                                color = Color(0xFF1D1B20)
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text(
-                                text = String.format("%.0f%%", percentage),
-                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                                color = Color(0xFF6750A4)
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text(
-                                text = String.format("￥%.1f", amount),
-                                style = MaterialTheme.typography.labelSmall,
-                                color = Color(0xFF49454F)
+                                text = dateStr,
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                     }
@@ -221,5 +232,4 @@ fun MonthlyChartCard(
             }
         }
     }
-
 }
