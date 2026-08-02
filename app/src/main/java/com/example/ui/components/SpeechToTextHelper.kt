@@ -24,7 +24,7 @@ class SpeechToTextHelper(private val context: Context) {
 
     fun startListening(onResult: (String) -> Unit) {
         if (!SpeechRecognizer.isRecognitionAvailable(context)) {
-            _errorState.value = "设备暂不支持系统语音识别"
+            _errorState.value = "当前运行环境（云端/模拟器）未内置系统语音识别服务。已为您保留下方快捷语音测试短语，在真机上可直接启动麦克风。"
             return
         }
 

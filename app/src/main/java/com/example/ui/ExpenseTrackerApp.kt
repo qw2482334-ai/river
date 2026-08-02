@@ -43,10 +43,12 @@ fun ExpenseTrackerApp(
     val investments by viewModel.investments.collectAsStateWithLifecycle()
     val isLoadingMarket by viewModel.isLoadingMarket.collectAsStateWithLifecycle()
     val lotteryRecords by viewModel.lotteryRecords.collectAsStateWithLifecycle()
+    val isCheckingLottery by viewModel.isCheckingLottery.collectAsStateWithLifecycle()
     val activeTab by viewModel.activeTab.collectAsStateWithLifecycle()
 
     val isParsingAi by viewModel.isParsingAi.collectAsStateWithLifecycle()
     val parsedExpenseResult by viewModel.parsedExpenseResult.collectAsStateWithLifecycle()
+    val isNetworkOnline by viewModel.isNetworkOnline.collectAsStateWithLifecycle()
     val aiErrorMessage by viewModel.aiErrorMessage.collectAsStateWithLifecycle()
 
     val chatMessages by viewModel.chatMessages.collectAsStateWithLifecycle()
@@ -73,6 +75,11 @@ fun ExpenseTrackerApp(
     var showSetBudgetDialog by remember { mutableStateOf(false) }
     var showAddGoalDialog by remember { mutableStateOf(false) }
     var showAiSettingsDialog by remember { mutableStateOf(false) }
+    var showUserGuideDialog by remember { mutableStateOf(false) }
+    var showInvestmentAnalytics by remember { mutableStateOf(false) }
+    var showLotteryAnalytics by remember { mutableStateOf(false) }
+    var showFinancialHealthDialog by remember { mutableStateOf(false) }
+    var showInvestmentCalculator by remember { mutableStateOf(false) }
 
     var selectedGoalForDeposit by remember { mutableStateOf<SavingsGoalEntity?>(null) }
 
@@ -129,6 +136,19 @@ fun ExpenseTrackerApp(
                                         modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                                     )
                                 }
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Surface(
+                                    color = if (isNetworkOnline) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.errorContainer,
+                                    shape = RoundedCornerShape(6.dp)
+                                ) {
+                                    Text(
+                                        text = if (isNetworkOnline) "🌐 联网正常" else "🔴 离线模式",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        fontWeight = FontWeight.Bold,
+                                        color = if (isNetworkOnline) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onErrorContainer,
+                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                    )
+                                }
                             }
                             Text(
                                 text = "智能记账 · 资产管理 · 理财基金 · 开发者: river_wzh",
@@ -172,6 +192,17 @@ fun ExpenseTrackerApp(
                             imageVector = Icons.Default.FileDownload,
                             contentDescription = "导出账单",
                             tint = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+
+                    // User Guide / Manual Button
+                    IconButton(
+                        onClick = { showUserGuideDialog = true }
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.HelpOutline,
+                            contentDescription = "软件使用说明与操作指南",
+                            tint = MaterialTheme.colorScheme.primary
                         )
                     }
 
@@ -282,7 +313,8 @@ fun ExpenseTrackerApp(
                                 expenses = allExpenses,
                                 savingsGoals = allGoals,
                                 investments = investments,
-                                lotteryRecords = lotteryRecords
+                                lotteryRecords = lotteryRecords,
+                                onOpenHealthDialog = { showFinancialHealthDialog = true }
                             )
                         }
 
@@ -402,7 +434,8 @@ fun ExpenseTrackerApp(
                                 expenses = allExpenses,
                                 savingsGoals = allGoals,
                                 investments = investments,
-                                lotteryRecords = lotteryRecords
+                                lotteryRecords = lotteryRecords,
+                                onOpenHealthDialog = { showFinancialHealthDialog = true }
                             )
                         }
 
@@ -412,16 +445,21 @@ fun ExpenseTrackerApp(
                                 onAddInvestment = { viewModel.addInvestment(it) },
                                 onDeleteInvestment = { viewModel.deleteInvestment(it) },
                                 onRefreshMarketQuotes = { viewModel.refreshMarketQuotes() },
-                                isLoadingMarket = isLoadingMarket
+                                isLoadingMarket = isLoadingMarket,
+                                onOpenAnalytics = { showInvestmentAnalytics = true },
+                                onOpenCalculator = { showInvestmentCalculator = true }
                             )
                         }
 
                         item {
                             LotteryTrackerCard(
                                 lotteryRecords = lotteryRecords,
+                                isCheckingLottery = isCheckingLottery,
                                 onAddRecord = { viewModel.addLotteryRecord(it) },
                                 onDeleteRecord = { viewModel.deleteLotteryRecord(it) },
-                                onUpdateRecordStatus = { id, st, win -> viewModel.updateLotteryStatus(id, st, win) }
+                                onUpdateRecordStatus = { id, st, win -> viewModel.updateLotteryStatus(id, st, win) },
+                                onCheckLiveResults = { viewModel.checkLotteryLiveResults() },
+                                onOpenAnalytics = { showLotteryAnalytics = true }
                             )
                         }
 
@@ -899,12 +937,69 @@ fun ExpenseTrackerApp(
         )
     }
 
-    // 9. Monthly AI Financial Report Dialog
+    // 9. User Guide & Software Operation Manual Dialog
+    if (showUserGuideDialog) {
+        UserGuideDialog(
+            onDismissRequest = { showUserGuideDialog = false },
+            onOpenAiSettings = { showAiSettingsDialog = true },
+            onOpenSmartAdd = { showSmartAiDialog = true }
+        )
+    }
+
+    // 10. Monthly AI Financial Report Dialog
     if (isReportLoading || monthlyReport != null) {
         AiFinancialReportDialog(
             reportText = monthlyReport ?: "",
             isLoading = isReportLoading,
             onDismiss = { viewModel.dismissReport() }
+        )
+    }
+
+    // 11. Investment Analytics & Annualized Return Dialog
+    if (showInvestmentAnalytics) {
+        InvestmentAnalyticsDialog(
+            investments = investments,
+            onDismissRequest = { showInvestmentAnalytics = false },
+            onAskAiAdvisor = { prompt ->
+                viewModel.sendChatMessage(prompt)
+                viewModel.setActiveTab(4)
+            }
+        )
+    }
+
+    // 12. Lottery Analytics & Kelly Criterion Dialog
+    if (showLotteryAnalytics) {
+        LotteryAnalyticsDialog(
+            lotteryRecords = lotteryRecords,
+            onDismissRequest = { showLotteryAnalytics = false },
+            onAskAiAdvisor = { prompt ->
+                viewModel.sendChatMessage(prompt)
+                viewModel.setActiveTab(4)
+            }
+        )
+    }
+
+    // 13. Financial Health & Emergency Safety Dialog
+    if (showFinancialHealthDialog) {
+        FinancialHealthDialog(
+            expenses = allExpenses,
+            savingsGoals = allGoals,
+            investments = investments,
+            onDismissRequest = { showFinancialHealthDialog = false },
+            onAskAiAdvisor = { prompt ->
+                viewModel.sendChatMessage(prompt)
+                viewModel.setActiveTab(4)
+            }
+        )
+    }
+
+    // 14. Investment Return Calculator Dialog
+    if (showInvestmentCalculator) {
+        InvestmentCalculatorDialog(
+            onDismissRequest = { showInvestmentCalculator = false },
+            onSaveToInvestments = { newItem ->
+                viewModel.addInvestment(newItem)
+            }
         )
     }
 }

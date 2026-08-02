@@ -6,6 +6,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountBalance
+import androidx.compose.material.icons.filled.HealthAndSafety
 import androidx.compose.material.icons.filled.Payments
 import androidx.compose.material.icons.filled.Savings
 import androidx.compose.material.icons.filled.ShowChart
@@ -30,6 +31,7 @@ fun NetWorthOverviewCard(
     savingsGoals: List<SavingsGoalEntity>,
     investments: List<InvestmentItem>,
     lotteryRecords: List<LotteryRecord>,
+    onOpenHealthDialog: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val totalCashIncome = remember(expenses) { expenses.filter { it.type == TransactionType.INCOME.name }.sumOf { it.amount } }
@@ -87,6 +89,18 @@ fun NetWorthOverviewCard(
                             color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
                         )
                     }
+                }
+
+                IconButton(
+                    onClick = onOpenHealthDialog,
+                    modifier = Modifier.size(36.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.HealthAndSafety,
+                        contentDescription = "财务健康与应急安全评测",
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(22.dp)
+                    )
                 }
             }
 

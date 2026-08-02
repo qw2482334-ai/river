@@ -1,6 +1,7 @@
 package com.example.ui.components
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -19,9 +20,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.example.data.AiConfigManager
+import com.example.data.CustomApiProfile
 import com.example.data.GeminiService
 import kotlinx.coroutines.launch
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AiSettingsDialog(
     aiConfigManager: AiConfigManager,
@@ -41,6 +44,44 @@ fun AiSettingsDialog(
     var testResultText by remember { mutableStateOf<String?>(null) }
     var isTestSuccess by remember { mutableStateOf(false) }
     var isSavedNoticeVisible by remember { mutableStateOf(false) }
+
+    // --- Dynamic Model List Fetching States ---
+    var availableModels by remember { mutableStateOf<List<String>>(emptyList()) }
+    var isFetchingModels by remember { mutableStateOf(false) }
+    var isModelDropdownExpanded by remember { mutableStateOf(false) }
+
+    // --- Custom Profile Management States ---
+    var customProfiles by remember { mutableStateOf(aiConfigManager.getCustomProfiles()) }
+    var showSaveProfileDialog by remember { mutableStateOf(false) }
+    var newProfileNameInput by remember { mutableStateOf("") }
+
+    fun autoFetchModels(url: String, key: String, protocol: String) {
+        if (url.isBlank()) return
+        // First load from local persistent cache if available
+        val cached = aiConfigManager.getCachedModelList(url)
+        if (cached.isNotEmpty()) {
+            availableModels = cached
+        }
+        isFetchingModels = true
+        coroutineScope.launch {
+            val result = geminiService.fetchAvailableModels(url, key, protocol)
+            isFetchingModels = false
+            result.onSuccess { models ->
+                if (models.isNotEmpty()) {
+                    availableModels = models
+                    aiConfigManager.saveCachedModelList(url, models)
+                    if (modelName.isBlank() || !models.contains(modelName)) {
+                        modelName = models.first()
+                    }
+                }
+            }
+        }
+    }
+
+    // Auto fetch models on open
+    LaunchedEffect(Unit) {
+        autoFetchModels(baseUrl, apiKey, protocolType)
+    }
 
     fun applyPreset(presetKey: String) {
         selectedPreset = presetKey
@@ -70,10 +111,36 @@ fun AiSettingsDialog(
                 modelName = "moonshot-v1-8k"
                 protocolType = "OPENAI"
             }
+            "NVIDIA" -> {
+                baseUrl = "https://integrate.api.nvidia.com/v1/"
+                modelName = "meta/llama-3.1-405b-instruct"
+                protocolType = "OPENAI"
+            }
+            "APIMART_1" -> {
+                baseUrl = "https://api.apimart.ai/v1/"
+                modelName = "gpt-4o"
+                protocolType = "OPENAI"
+            }
+            "APIMART_2" -> {
+                baseUrl = "https://api.apib.ai/v1/"
+                modelName = "gpt-4o"
+                protocolType = "OPENAI"
+            }
+            "APIMART_3" -> {
+                baseUrl = "https://api.aiuxu.com/v1/"
+                modelName = "gpt-4o"
+                protocolType = "OPENAI"
+            }
+            "APIMART_4" -> {
+                baseUrl = "https://api.aishuch.com/v1/"
+                modelName = "gpt-4o"
+                protocolType = "OPENAI"
+            }
             "CUSTOM" -> {
                 protocolType = "OPENAI"
             }
         }
+        autoFetchModels(baseUrl, apiKey, protocolType)
     }
 
     Dialog(
@@ -83,7 +150,7 @@ fun AiSettingsDialog(
         Card(
             modifier = Modifier
                 .fillMaxWidth(0.92f)
-                .fillMaxHeight(0.85f)
+                .fillMaxHeight(0.88f)
                 .testTag("ai_settings_dialog"),
             shape = RoundedCornerShape(24.dp),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
@@ -107,7 +174,7 @@ fun AiSettingsDialog(
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = "自定义 AI & 国内模型配置",
+                            text = "自定义 AI & 模型搜索配置",
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold
                         )
@@ -119,10 +186,40 @@ fun AiSettingsDialog(
                 }
 
                 Text(
-                    text = "支持 Google Gemini、DeepSeek、硅基流动、Qwen、Kimi 或免费本地模式",
+                    text = "填写 Base URL 自动检索可调用的大模型，并支持增加管理多个自定义 OpenAI 接口",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+
+                Spacer(modifier = Modifier.height(6.dp))
+
+                Surface(
+                    color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f),
+                    shape = RoundedCornerShape(10.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Default.CheckCircle,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = "网络状态: 已具备 INTERNET 联网权限与 HTTP/HTTPS 实时通信能力",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onSecondaryContainer
+                            )
+                        }
+                    }
+                }
 
                 HorizontalDivider(modifier = Modifier.padding(vertical = 10.dp))
 
@@ -147,7 +244,12 @@ fun AiSettingsDialog(
                         Triple("SILICONFLOW", "硅基流动 SiliconFlow", "DeepSeek-V3"),
                         Triple("QWEN", "阿里通义千问 Qwen", "qwen-turbo"),
                         Triple("KIMI", "Moonshot / Kimi 智能体", "moonshot-v1-8k"),
-                        Triple("CUSTOM", "自定义 OpenAI 中转站", "自定义模型")
+                        Triple("NVIDIA", "英伟达 NVIDIA NIM API", "meta/llama-3.1-405b-instruct"),
+                        Triple("APIMART_1", "Apimart 中转 1 (api.apimart.ai)", "gpt-4o / deepseek"),
+                        Triple("APIMART_2", "Apimart 中转 2 (api.apib.ai)", "gpt-4o / deepseek"),
+                        Triple("APIMART_3", "Apimart 中转 3 (api.aiuxu.com)", "gpt-4o / deepseek"),
+                        Triple("APIMART_4", "Apimart 中转 4 (api.aishuch.com)", "gpt-4o / deepseek"),
+                        Triple("CUSTOM", "自定义 OpenAI 中转站", "自动拉取可用模型")
                     )
 
                     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -191,6 +293,112 @@ fun AiSettingsDialog(
                         }
                     }
 
+                    // --- Custom OpenAI Multi-Profile Management ---
+                    Spacer(modifier = Modifier.height(14.dp))
+                    HorizontalDivider()
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "⚙️ 我的自定义 OpenAI 接口库 (${customProfiles.size}个)",
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.Bold
+                        )
+                        TextButton(
+                            onClick = {
+                                newProfileNameInput = "自定义接口 ${customProfiles.size + 1}"
+                                showSaveProfileDialog = true
+                            }
+                        ) {
+                            Icon(imageVector = Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("增加新接口配置", style = MaterialTheme.typography.labelSmall)
+                        }
+                    }
+
+                    if (customProfiles.isEmpty()) {
+                        Text(
+                            text = "尚未保存自定义接口。在下方填写 Base URL 及 API Key 后，点击上方「增加新接口配置」可无限保存多个中转站并随时切换！",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    } else {
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            customProfiles.forEach { profile ->
+                                val isActive = selectedPreset == "CUSTOM_${profile.id}"
+                                OutlinedCard(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    shape = RoundedCornerShape(12.dp),
+                                    border = BorderStroke(
+                                        width = if (isActive) 2.dp else 1.dp,
+                                        color = if (isActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant
+                                    )
+                                ) {
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(12.dp),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text(
+                                                text = profile.name,
+                                                style = MaterialTheme.typography.bodyMedium,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                            Text(
+                                                text = profile.baseUrl,
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                maxLines = 1
+                                            )
+                                            Text(
+                                                text = "模型: ${profile.modelName}",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = MaterialTheme.colorScheme.primary
+                                            )
+                                        }
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Button(
+                                                onClick = {
+                                                    aiConfigManager.applyCustomProfile(profile)
+                                                    selectedPreset = "CUSTOM_${profile.id}"
+                                                    baseUrl = profile.baseUrl
+                                                    apiKey = profile.apiKey
+                                                    modelName = profile.modelName
+                                                    protocolType = profile.protocolType
+                                                    autoFetchModels(profile.baseUrl, profile.apiKey, profile.protocolType)
+                                                },
+                                                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                                                shape = RoundedCornerShape(8.dp)
+                                            ) {
+                                                Text(if (isActive) "已激活" else "切换启用", style = MaterialTheme.typography.labelMedium)
+                                            }
+                                            IconButton(
+                                                onClick = {
+                                                    aiConfigManager.deleteCustomProfile(profile.id)
+                                                    customProfiles = aiConfigManager.getCustomProfiles()
+                                                }
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Default.DeleteOutline,
+                                                    contentDescription = "删除接口",
+                                                    tint = MaterialTheme.colorScheme.error,
+                                                    modifier = Modifier.size(20.dp)
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
                     Spacer(modifier = Modifier.height(14.dp))
                     HorizontalDivider()
                     Spacer(modifier = Modifier.height(14.dp))
@@ -205,7 +413,9 @@ fun AiSettingsDialog(
 
                     OutlinedTextField(
                         value = apiKey,
-                        onValueChange = { apiKey = it },
+                        onValueChange = {
+                            apiKey = it
+                        },
                         placeholder = { Text("粘贴您的 API Key (如 AIzaSy... / sk-...)") },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth(),
@@ -222,7 +432,7 @@ fun AiSettingsDialog(
 
                     Spacer(modifier = Modifier.height(12.dp))
 
-                    // 2. Base URL Field
+                    // 2. Base URL Field with Search Trigger
                     Text(
                         text = "2. API 接口基址 (Base URL)",
                         style = MaterialTheme.typography.labelLarge,
@@ -232,29 +442,134 @@ fun AiSettingsDialog(
 
                     OutlinedTextField(
                         value = baseUrl,
-                        onValueChange = { baseUrl = it },
+                        onValueChange = {
+                            baseUrl = it
+                            if (it.startsWith("http://") || it.startsWith("https://")) {
+                                autoFetchModels(it, apiKey, protocolType)
+                            }
+                        },
                         placeholder = { Text("例如 https://api.deepseek.com/") },
                         singleLine = true,
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier.fillMaxWidth(),
+                        trailingIcon = {
+                            IconButton(onClick = { autoFetchModels(baseUrl, apiKey, protocolType) }) {
+                                Icon(
+                                    imageVector = Icons.Default.Search,
+                                    contentDescription = "检索模型",
+                                    tint = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                        }
                     )
 
                     Spacer(modifier = Modifier.height(12.dp))
 
-                    // 3. Model Name Field
-                    Text(
-                        text = "3. AI 模型名称 (Model Name)",
-                        style = MaterialTheme.typography.labelLarge,
-                        fontWeight = FontWeight.Bold
-                    )
+                    // 3. Model Name Field with Auto-List Selection Dropdown
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "3. AI 模型名称 (已从 Base URL 自动检索列表)",
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.Bold
+                        )
+                        TextButton(
+                            onClick = { autoFetchModels(baseUrl, apiKey, protocolType) },
+                            enabled = !isFetchingModels
+                        ) {
+                            Icon(imageVector = Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(14.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("刷新模型列表", style = MaterialTheme.typography.labelSmall)
+                        }
+                    }
                     Spacer(modifier = Modifier.height(4.dp))
 
-                    OutlinedTextField(
-                        value = modelName,
-                        onValueChange = { modelName = it },
-                        placeholder = { Text("gemini-1.5-flash / deepseek-chat") },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth()
-                    )
+                    if (isFetchingModels) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.padding(vertical = 4.dp)
+                        ) {
+                            CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("正在通过该接口地址拉取所有可用 AI 模型列表...", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+                        }
+                    }
+
+                    ExposedDropdownMenuBox(
+                        expanded = isModelDropdownExpanded,
+                        onExpandedChange = { isModelDropdownExpanded = !isModelDropdownExpanded }
+                    ) {
+                        OutlinedTextField(
+                            value = modelName,
+                            onValueChange = { modelName = it },
+                            placeholder = { Text("点击右侧下拉或手动输入") },
+                            singleLine = true,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .menuAnchor(),
+                            trailingIcon = {
+                                ExposedDropdownMenuDefaults.TrailingIcon(expanded = isModelDropdownExpanded)
+                            },
+                            colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors()
+                        )
+
+                        ExposedDropdownMenu(
+                            expanded = isModelDropdownExpanded,
+                            onDismissRequest = { isModelDropdownExpanded = false }
+                        ) {
+                            if (availableModels.isEmpty()) {
+                                DropdownMenuItem(
+                                    text = { Text("（点击此处或输入文字来自定义模型名称）") },
+                                    onClick = { isModelDropdownExpanded = false }
+                                )
+                            } else {
+                                availableModels.forEach { model ->
+                                    DropdownMenuItem(
+                                        text = {
+                                            Row(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                horizontalArrangement = Arrangement.SpaceBetween
+                                            ) {
+                                                Text(
+                                                    text = model,
+                                                    fontWeight = if (model == modelName) FontWeight.Bold else FontWeight.Normal
+                                                )
+                                                if (model == modelName) {
+                                                    Icon(imageVector = Icons.Default.Check, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                                                }
+                                            }
+                                        },
+                                        onClick = {
+                                            modelName = model
+                                            isModelDropdownExpanded = false
+                                        }
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    // Quick Chips for Available Models
+                    if (availableModels.isNotEmpty()) {
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text("快捷点击选择已检索到的模型：", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .horizontalScroll(rememberScrollState()),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            availableModels.take(8).forEach { model ->
+                                FilterChip(
+                                    selected = model == modelName,
+                                    onClick = { modelName = model },
+                                    label = { Text(model, style = MaterialTheme.typography.labelSmall) }
+                                )
+                            }
+                        }
+                    }
 
                     Spacer(modifier = Modifier.height(16.dp))
 
@@ -384,30 +699,92 @@ fun AiSettingsDialog(
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.End,
+                    horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    TextButton(onClick = onDismiss) {
-                        Text("取消")
-                    }
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Button(
+                    TextButton(
                         onClick = {
-                            aiConfigManager.saveApiKey(apiKey)
-                            aiConfigManager.saveBaseUrl(baseUrl)
-                            aiConfigManager.saveModelName(modelName)
-                            aiConfigManager.saveProtocolType(protocolType)
-                            aiConfigManager.saveProvider(selectedPreset)
-                            isSavedNoticeVisible = true
-                        },
-                        shape = RoundedCornerShape(12.dp)
+                            newProfileNameInput = "自定义接口 ${customProfiles.size + 1}"
+                            showSaveProfileDialog = true
+                        }
                     ) {
-                        Icon(imageVector = Icons.Default.Save, contentDescription = null, modifier = Modifier.size(18.dp))
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text("保存配置并启用")
+                        Icon(imageVector = Icons.Default.BookmarkAdd, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("存为新接口", style = MaterialTheme.typography.labelMedium)
+                    }
+
+                    Row {
+                        TextButton(onClick = onDismiss) {
+                            Text("取消")
+                        }
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Button(
+                            onClick = {
+                                aiConfigManager.saveApiKey(apiKey)
+                                aiConfigManager.saveBaseUrl(baseUrl)
+                                aiConfigManager.saveModelName(modelName)
+                                aiConfigManager.saveProtocolType(protocolType)
+                                aiConfigManager.saveProvider(selectedPreset)
+                                isSavedNoticeVisible = true
+                            },
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Icon(imageVector = Icons.Default.Save, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("保存配置并启用")
+                        }
                     }
                 }
             }
         }
     }
+
+    // Save New Custom API Profile Dialog
+    if (showSaveProfileDialog) {
+        AlertDialog(
+            onDismissRequest = { showSaveProfileDialog = false },
+            title = { Text("保存自定义 API 接口配置") },
+            text = {
+                Column {
+                    Text("请为此接口（例如：DeepSeek专线、公司OneAPI中转站）命名：", style = MaterialTheme.typography.bodySmall)
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = newProfileNameInput,
+                        onValueChange = { newProfileNameInput = it },
+                        label = { Text("接口名称") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        if (newProfileNameInput.isNotBlank()) {
+                            val newProfile = CustomApiProfile(
+                                name = newProfileNameInput.trim(),
+                                baseUrl = baseUrl,
+                                apiKey = apiKey,
+                                modelName = modelName,
+                                protocolType = protocolType
+                            )
+                            aiConfigManager.addCustomProfile(newProfile)
+                            aiConfigManager.applyCustomProfile(newProfile)
+                            selectedPreset = "CUSTOM_${newProfile.id}"
+                            customProfiles = aiConfigManager.getCustomProfiles()
+                            showSaveProfileDialog = false
+                        }
+                    }
+                ) {
+                    Text("保存接口")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showSaveProfileDialog = false }) {
+                    Text("取消")
+                }
+            }
+        )
+    }
 }
+

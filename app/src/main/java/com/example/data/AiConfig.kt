@@ -3,6 +3,10 @@ package com.example.data
 import android.content.Context
 import android.content.SharedPreferences
 import com.example.BuildConfig
+import com.squareup.moshi.Moshi
+import com.squareup.moshi.Types
+import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
+import java.util.UUID
 
 data class AiConfig(
     val apiKey: String,
@@ -12,12 +16,25 @@ data class AiConfig(
     val provider: String = "GEMINI"
 )
 
-class AiConfigManager(context: Context) {
-    private val prefs: SharedPreferences =
-        context.getSharedPreferences("ai_config_prefs", Context.MODE_PRIVATE)
+data class CustomApiProfile(
+    val id: String = UUID.randomUUID().toString(),
+    val name: String,
+    val baseUrl: String,
+    val apiKey: String,
+    val modelName: String,
+    val protocolType: String = "OPENAI"
+)
+
+class AiConfigManager(context: Context? = null) {
+    private val prefs: SharedPreferences? =
+        context?.getSharedPreferences("ai_config_prefs", Context.MODE_PRIVATE)
+
+    private val moshi = Moshi.Builder()
+        .add(KotlinJsonAdapterFactory())
+        .build()
 
     fun getApiKey(): String {
-        val savedKey = prefs.getString("api_key", "") ?: ""
+        val savedKey = prefs?.getString("api_key", "") ?: ""
         if (savedKey.isNotBlank()) return savedKey
         return try {
             val buildKey = BuildConfig.GEMINI_API_KEY
@@ -28,11 +45,11 @@ class AiConfigManager(context: Context) {
     }
 
     fun saveApiKey(key: String) {
-        prefs.edit().putString("api_key", key.trim()).apply()
+        prefs?.edit()?.putString("api_key", key.trim())?.apply()
     }
 
     fun getBaseUrl(): String {
-        val savedUrl = prefs.getString("base_url", "") ?: ""
+        val savedUrl = prefs?.getString("base_url", "") ?: ""
         if (savedUrl.isNotBlank()) return savedUrl
         return "https://generativelanguage.googleapis.com/"
     }
@@ -41,37 +58,37 @@ class AiConfigManager(context: Context) {
         val formatted = if (url.isBlank()) "https://generativelanguage.googleapis.com/"
         else if (!url.endsWith("/")) "$url/"
         else url
-        prefs.edit().putString("base_url", formatted.trim()).apply()
+        prefs?.edit()?.putString("base_url", formatted.trim())?.apply()
     }
 
     fun getModelName(): String {
-        val savedModel = prefs.getString("model_name", "") ?: ""
+        val savedModel = prefs?.getString("model_name", "") ?: ""
         if (savedModel.isNotBlank()) return savedModel
         return "gemini-1.5-flash"
     }
 
     fun saveModelName(model: String) {
         val formatted = if (model.isBlank()) "gemini-1.5-flash" else model.trim()
-        prefs.edit().putString("model_name", formatted).apply()
+        prefs?.edit()?.putString("model_name", formatted)?.apply()
     }
 
     fun getProtocolType(): String {
-        val savedProtocol = prefs.getString("protocol_type", "") ?: ""
+        val savedProtocol = prefs?.getString("protocol_type", "") ?: ""
         if (savedProtocol.isNotBlank()) return savedProtocol
         val url = getBaseUrl()
         return if (url.contains("googleapis.com")) "GEMINI" else "OPENAI"
     }
 
     fun saveProtocolType(protocol: String) {
-        prefs.edit().putString("protocol_type", protocol).apply()
+        prefs?.edit()?.putString("protocol_type", protocol)?.apply()
     }
 
     fun getProvider(): String {
-        return prefs.getString("provider", "GEMINI") ?: "GEMINI"
+        return prefs?.getString("provider", "GEMINI") ?: "GEMINI"
     }
 
     fun saveProvider(provider: String) {
-        prefs.edit().putString("provider", provider).apply()
+        prefs?.edit()?.putString("provider", provider)?.apply()
     }
 
     fun getConfig(): AiConfig {
@@ -82,6 +99,77 @@ class AiConfigManager(context: Context) {
             protocolType = getProtocolType(),
             provider = getProvider()
         )
+    }
+
+    fun getCachedModelList(baseUrl: String): List<String> {
+        val cleanUrl = baseUrl.trim().lowercase().replace(Regex("[^a-z0-9]"), "_")
+        val key = "cached_models_$cleanUrl"
+        val json = prefs?.getString(key, "") ?: ""
+        if (json.isBlank()) return emptyList()
+        return try {
+            val type = Types.newParameterizedType(List::class.java, String::class.java)
+            val adapter = moshi.adapter<List<String>>(type)
+            adapter.fromJson(json) ?: emptyList()
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
+
+    fun saveCachedModelList(baseUrl: String, models: List<String>) {
+        if (baseUrl.isBlank() || models.isEmpty()) return
+        val cleanUrl = baseUrl.trim().lowercase().replace(Regex("[^a-z0-9]"), "_")
+        val key = "cached_models_$cleanUrl"
+        try {
+            val type = Types.newParameterizedType(List::class.java, String::class.java)
+            val adapter = moshi.adapter<List<String>>(type)
+            val json = adapter.toJson(models)
+            prefs?.edit()?.putString(key, json)?.apply()
+        } catch (e: Exception) {
+            // ignore
+        }
+    }
+
+    // --- Custom Multi-Profile Management ---
+    fun getCustomProfiles(): List<CustomApiProfile> {
+        val json = prefs?.getString("custom_profiles_json", "") ?: ""
+        if (json.isBlank()) return emptyList()
+        return try {
+            val type = Types.newParameterizedType(List::class.java, CustomApiProfile::class.java)
+            val adapter = moshi.adapter<List<CustomApiProfile>>(type)
+            adapter.fromJson(json) ?: emptyList()
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
+
+    fun saveCustomProfiles(profiles: List<CustomApiProfile>) {
+        try {
+            val type = Types.newParameterizedType(List::class.java, CustomApiProfile::class.java)
+            val adapter = moshi.adapter<List<CustomApiProfile>>(type)
+            val json = adapter.toJson(profiles)
+            prefs?.edit()?.putString("custom_profiles_json", json)?.apply()
+        } catch (e: Exception) {
+            // ignore
+        }
+    }
+
+    fun addCustomProfile(profile: CustomApiProfile) {
+        val current = getCustomProfiles().toMutableList()
+        current.add(profile)
+        saveCustomProfiles(current)
+    }
+
+    fun deleteCustomProfile(profileId: String) {
+        val current = getCustomProfiles().filterNot { it.id == profileId }
+        saveCustomProfiles(current)
+    }
+
+    fun applyCustomProfile(profile: CustomApiProfile) {
+        saveProvider("CUSTOM_${profile.id}")
+        saveBaseUrl(profile.baseUrl)
+        saveApiKey(profile.apiKey)
+        saveModelName(profile.modelName)
+        saveProtocolType(profile.protocolType)
     }
 
     fun applyPreset(providerKey: String) {
@@ -110,6 +198,31 @@ class AiConfigManager(context: Context) {
             "KIMI" -> {
                 saveBaseUrl("https://api.moonshot.cn/v1/")
                 saveModelName("moonshot-v1-8k")
+                saveProtocolType("OPENAI")
+            }
+            "NVIDIA" -> {
+                saveBaseUrl("https://integrate.api.nvidia.com/v1/")
+                saveModelName("meta/llama-3.1-405b-instruct")
+                saveProtocolType("OPENAI")
+            }
+            "APIMART_1" -> {
+                saveBaseUrl("https://api.apimart.ai/v1/")
+                saveModelName("gpt-4o")
+                saveProtocolType("OPENAI")
+            }
+            "APIMART_2" -> {
+                saveBaseUrl("https://api.apib.ai/v1/")
+                saveModelName("gpt-4o")
+                saveProtocolType("OPENAI")
+            }
+            "APIMART_3" -> {
+                saveBaseUrl("https://api.aiuxu.com/v1/")
+                saveModelName("gpt-4o")
+                saveProtocolType("OPENAI")
+            }
+            "APIMART_4" -> {
+                saveBaseUrl("https://api.aishuch.com/v1/")
+                saveModelName("gpt-4o")
                 saveProtocolType("OPENAI")
             }
             "CUSTOM" -> {

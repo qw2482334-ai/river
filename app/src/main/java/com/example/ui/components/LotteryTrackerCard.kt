@@ -7,8 +7,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Analytics
 import androidx.compose.material.icons.filled.Casino
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.SportsFootball
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.*
@@ -31,9 +33,12 @@ import com.example.ui.theme.IncomeGreen
 @Composable
 fun LotteryTrackerCard(
     lotteryRecords: List<LotteryRecord>,
+    isCheckingLottery: Boolean = false,
     onAddRecord: (LotteryRecord) -> Unit,
     onDeleteRecord: (String) -> Unit,
     onUpdateRecordStatus: (String, LotteryStatus, Double) -> Unit,
+    onCheckLiveResults: () -> Unit = {},
+    onOpenAnalytics: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     var showAddDialog by remember { mutableStateOf(false) }
@@ -86,22 +91,60 @@ fun LotteryTrackerCard(
                             fontWeight = FontWeight.Bold
                         )
                         Text(
-                            text = "竞彩/大乐透投注统计与理性风控",
+                            text = "竞彩/大乐透联网开奖核对与理性风控",
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 }
 
-                FilledTonalIconButton(
-                    onClick = { showAddDialog = true },
-                    modifier = Modifier.size(32.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Add,
-                        contentDescription = "新增注单",
-                        modifier = Modifier.size(18.dp)
-                    )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(
+                        onClick = onOpenAnalytics,
+                        modifier = Modifier.size(32.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Analytics,
+                            contentDescription = "足彩与彩票数据复盘与风控分析",
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.width(2.dp))
+
+                    if (isCheckingLottery) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(20.dp),
+                            strokeWidth = 2.dp,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    } else {
+                        IconButton(
+                            onClick = onCheckLiveResults,
+                            modifier = Modifier.size(32.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Refresh,
+                                contentDescription = "联网开奖与对账",
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.width(4.dp))
+
+                    FilledTonalIconButton(
+                        onClick = { showAddDialog = true },
+                        modifier = Modifier.size(32.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Add,
+                            contentDescription = "新增注单",
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
                 }
             }
 

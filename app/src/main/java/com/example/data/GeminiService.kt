@@ -9,6 +9,7 @@ import okhttp3.OkHttpClient
 import retrofit2.Retrofit
 import retrofit2.converter.moshi.MoshiConverterFactory
 import retrofit2.http.Body
+import retrofit2.http.GET
 import retrofit2.http.Header
 import retrofit2.http.POST
 import retrofit2.http.Query
@@ -81,6 +82,25 @@ data class OpenAiError(
     @Json(name = "message") val message: String? = null
 )
 
+data class OpenAiModelItem(
+    @Json(name = "id") val id: String? = null,
+    @Json(name = "name") val name: String? = null
+)
+
+data class OpenAiModelsResponse(
+    @Json(name = "data") val data: List<OpenAiModelItem>? = null,
+    @Json(name = "models") val models: List<OpenAiModelItem>? = null
+)
+
+data class GeminiModelItem(
+    @Json(name = "name") val name: String? = null,
+    @Json(name = "displayName") val displayName: String? = null
+)
+
+data class GeminiModelsResponse(
+    @Json(name = "models") val models: List<GeminiModelItem>? = null
+)
+
 data class ParsedExpense(
     val title: String = "",
     val amount: Double = 0.0,
@@ -96,6 +116,12 @@ interface GeminiRestApi {
         @Query("key") apiKey: String,
         @Body request: GenerateContentRequest
     ): GenerateContentResponse
+
+    @GET
+    suspend fun listGeminiModels(
+        @Url url: String,
+        @Query("key") apiKey: String
+    ): GeminiModelsResponse
 }
 
 interface OpenAiRestApi {
@@ -105,6 +131,12 @@ interface OpenAiRestApi {
         @Header("Authorization") authorization: String,
         @Body request: OpenAiChatRequest
     ): OpenAiChatResponse
+
+    @GET
+    suspend fun listOpenAiModels(
+        @Url url: String,
+        @Header("Authorization") authorization: String
+    ): OpenAiModelsResponse
 }
 
 class GeminiService(private val aiConfigManager: AiConfigManager) {
@@ -140,7 +172,9 @@ class GeminiService(private val aiConfigManager: AiConfigManager) {
         val cleanBase = baseUrl.trim().removeSuffix("/")
         return when {
             cleanBase.endsWith("/chat/completions") -> cleanBase
-            cleanBase.endsWith("/v1") -> "$cleanBase/chat/completions"
+            cleanBase.endsWith("/chat/completions/") -> cleanBase.removeSuffix("/")
+            cleanBase.endsWith("/v1") || cleanBase.endsWith("/v1beta") -> "$cleanBase/chat/completions"
+            cleanBase.endsWith("/chat") -> "$cleanBase/completions"
             else -> "$cleanBase/v1/chat/completions"
         }
     }
@@ -190,6 +224,60 @@ class GeminiService(private val aiConfigManager: AiConfigManager) {
             }
         } catch (e: Exception) {
             Result.failure(Exception("连接失败: ${e.localizedMessage ?: "网络不可达或密钥无效"}"))
+        }
+    }
+
+    suspend fun fetchAvailableModels(baseUrl: String, apiKey: String, protocolType: String): Result<List<String>> = withContext(Dispatchers.IO) {
+        val cleanKey = apiKey.trim()
+        val cleanBase = baseUrl.trim()
+
+        try {
+            if (protocolType == "GEMINI" || cleanBase.contains("googleapis.com")) {
+                val listUrl = if (cleanBase.endsWith("/")) "${cleanBase}v1beta/models" else "$cleanBase/v1beta/models"
+                val response = geminiApi.listGeminiModels(listUrl, cleanKey)
+                val modelList = response.models?.mapNotNull { item ->
+                    val rawName = item.name ?: return@mapNotNull null
+                    rawName.removePrefix("models/")
+                } ?: emptyList()
+                if (modelList.isNotEmpty()) {
+                    Result.success(modelList)
+                } else {
+                    Result.success(listOf("gemini-1.5-flash", "gemini-1.5-pro", "gemini-2.0-flash-exp"))
+                }
+            } else {
+                val modelsUrl = when {
+                    cleanBase.endsWith("/models") -> cleanBase
+                    cleanBase.endsWith("/v1") -> "$cleanBase/models"
+                    cleanBase.endsWith("/v1/") -> "${cleanBase}models"
+                    cleanBase.endsWith("/chat/completions") -> cleanBase.removeSuffix("/chat/completions") + "/models"
+                    cleanBase.endsWith("/") -> "${cleanBase}v1/models"
+                    else -> "$cleanBase/v1/models"
+                }
+                val authHeader = if (cleanKey.startsWith("Bearer ") || cleanKey.isBlank()) cleanKey else "Bearer $cleanKey"
+                val response = openAiApi.listOpenAiModels(modelsUrl, authHeader)
+                val items = response.data ?: response.models ?: emptyList()
+                val modelList = items.mapNotNull { it.id ?: it.name }.filter { it.isNotBlank() }
+                if (modelList.isNotEmpty()) {
+                    Result.success(modelList)
+                } else {
+                    Result.success(getFallbackModelListForUrl(cleanBase))
+                }
+            }
+        } catch (e: Exception) {
+            Result.success(getFallbackModelListForUrl(cleanBase))
+        }
+    }
+
+    private fun getFallbackModelListForUrl(baseUrl: String): List<String> {
+        val url = baseUrl.lowercase()
+        return when {
+            url.contains("nvidia") -> listOf("meta/llama-3.1-405b-instruct", "meta/llama-3.1-70b-instruct", "nvidia/neva-22b", "mistralai/mistral-large-2-instruct")
+            url.contains("apimart") || url.contains("apib.ai") || url.contains("aiuxu") || url.contains("aishuch") -> listOf("gpt-4o", "gpt-4o-mini", "claude-3-5-sonnet-20241022", "deepseek-chat", "deepseek-reasoner")
+            url.contains("deepseek") -> listOf("deepseek-chat", "deepseek-coder", "deepseek-reasoner")
+            url.contains("siliconflow") -> listOf("deepseek-ai/DeepSeek-V3", "deepseek-ai/DeepSeek-R1", "Qwen/Qwen2.5-72B-Instruct", "meta-llama/Meta-Llama-3.1-70B-Instruct")
+            url.contains("dashscope") || url.contains("aliyuncs") -> listOf("qwen-turbo", "qwen-plus", "qwen-max", "qwen-long")
+            url.contains("moonshot") || url.contains("kimi") -> listOf("moonshot-v1-8k", "moonshot-v1-32k", "moonshot-v1-128k")
+            else -> listOf("gpt-4o", "gpt-4o-mini", "gpt-3.5-turbo", "deepseek-chat", "qwen-turbo")
         }
     }
 

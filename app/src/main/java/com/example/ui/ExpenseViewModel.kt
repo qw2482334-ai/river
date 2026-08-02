@@ -14,6 +14,11 @@ class ExpenseViewModel(application: Application) : AndroidViewModel(application)
     val aiConfigManager = AiConfigManager(application)
     val geminiService = GeminiService(aiConfigManager)
     val currencyService = CurrencyService()
+    val marketService = FinancialMarketService()
+    private val networkObserver = NetworkObserver(application)
+
+    val isNetworkOnline: StateFlow<Boolean> = networkObserver.isOnline
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), networkObserver.isCurrentlyOnline())
 
     // Real-Time Currency Exchange Rates State (REST API)
     private val _exchangeRates = MutableStateFlow<Map<String, Double>>(
@@ -52,6 +57,9 @@ class ExpenseViewModel(application: Application) : AndroidViewModel(application)
         )
     )
     val lotteryRecords: StateFlow<List<LotteryRecord>> = _lotteryRecords.asStateFlow()
+
+    private val _isCheckingLottery = MutableStateFlow(false)
+    val isCheckingLottery: StateFlow<Boolean> = _isCheckingLottery.asStateFlow()
 
     // Current Ledger Selection
     private val _selectedLedger = MutableStateFlow("全部账本")
@@ -188,15 +196,18 @@ class ExpenseViewModel(application: Application) : AndroidViewModel(application)
     fun refreshMarketQuotes() {
         viewModelScope.launch {
             _isLoadingMarket.value = true
-            _snackbarEvent.emit("💹 正在同步最新市场价格行情与估值波动...")
-            kotlinx.coroutines.delay(1200) // Simulate market quote polling latency
-            _investments.value = _investments.value.map { item ->
-                val fluctuation = ((-20..25).random() / 1000.0) // -2.0% to +2.5%
-                val newVal = (item.currentValue * (1.0 + fluctuation)).coerceAtLeast(0.0)
-                item.copy(currentValue = newVal)
+            _snackbarEvent.emit("💹 正在联网同步最新公募基金/证券估值行情...")
+
+            val updatedList = _investments.value.map { item ->
+                val result = marketService.fetchFundQuote(item.code, item.principal, item.currentValue)
+                result.getOrNull()?.let { quote ->
+                    item.copy(currentValue = quote.estimatedValue)
+                } ?: item
             }
+
+            _investments.value = updatedList
             _isLoadingMarket.value = false
-            _snackbarEvent.emit("✅ 证券理财持仓估值已完成行情刷新！")
+            _snackbarEvent.emit("✅ 证券理财持仓估值已完成实时行情更新！")
         }
     }
 
@@ -215,6 +226,36 @@ class ExpenseViewModel(application: Application) : AndroidViewModel(application)
             if (rec.id == id) rec.copy(status = status, winAmount = winAmount) else rec
         }
         viewModelScope.launch { _snackbarEvent.emit("🎯 彩票单状态已更新为: ${status.label}") }
+    }
+
+    fun checkLotteryLiveResults() {
+        viewModelScope.launch {
+            if (_lotteryRecords.value.isEmpty()) {
+                _snackbarEvent.emit("💡 暂无待核对的足彩或彩票注单，请先添加")
+                return@launch
+            }
+
+            _isCheckingLottery.value = true
+            _snackbarEvent.emit("⚽ 正在发起联网/AI开奖与比赛完场比分对账...")
+
+            marketService.checkLotteryLiveResults(_lotteryRecords.value, geminiService)
+                .onSuccess { results ->
+                    val resultMap = results.associateBy { it.recordId }
+                    _lotteryRecords.value = _lotteryRecords.value.map { rec ->
+                        val res = resultMap[rec.id]
+                        if (res != null) {
+                            rec.copy(status = res.status, winAmount = res.winAmount)
+                        } else rec
+                    }
+                    _isCheckingLottery.value = false
+                    val wonCount = results.count { it.status == LotteryStatus.WON }
+                    _snackbarEvent.emit("🎯 联网开奖核对完成！其中 $wonCount 笔命中派彩")
+                }
+                .onFailure { err ->
+                    _isCheckingLottery.value = false
+                    _snackbarEvent.emit("⚠️ 联网开奖核对遇到异常: ${err.localizedMessage}")
+                }
+        }
     }
 
     fun setLedger(ledger: String) {

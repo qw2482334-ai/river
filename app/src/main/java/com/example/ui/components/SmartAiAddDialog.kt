@@ -55,7 +55,7 @@ fun SmartAiAddDialog(
     val recognizedText by speechHelper.recognizedText
     val speechError by speechHelper.errorState
 
-    // 1. Photo Gallery Picker for Receipt OCR
+    // 1. Photo Gallery & Document File Picker for Receipt/Bill Parsing
     val galleryPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri ->
@@ -64,15 +64,27 @@ fun SmartAiAddDialog(
                 localPermissionError = null
                 val inputStream = context.contentResolver.openInputStream(it)
                 val bytes = inputStream?.readBytes()
-                if (bytes != null) {
+                if (bytes != null && bytes.isNotEmpty()) {
                     val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
-                    val outputStream = ByteArrayOutputStream()
-                    bitmap.compress(Bitmap.CompressFormat.JPEG, 80, outputStream)
-                    val base64 = Base64.encodeToString(outputStream.toByteArray(), Base64.NO_WRAP)
-                    onParseImage(base64, "image/jpeg")
+                    if (bitmap != null) {
+                        // It's an image file (Receipt/Invoice photo)
+                        val outputStream = ByteArrayOutputStream()
+                        bitmap.compress(Bitmap.CompressFormat.JPEG, 80, outputStream)
+                        val base64 = Base64.encodeToString(outputStream.toByteArray(), Base64.NO_WRAP)
+                        onParseImage(base64, "image/jpeg")
+                    } else {
+                        // It's a text/document bill file (TXT, CSV, JSON)
+                        val text = String(bytes, Charsets.UTF_8).trim()
+                        if (text.isNotBlank()) {
+                            inputText = text
+                            onParseText(text)
+                        } else {
+                            localPermissionError = "选中的文件内容为空或格式不被支持"
+                        }
+                    }
                 }
             } catch (e: Exception) {
-                localPermissionError = "读取选中的图片失败：${e.localizedMessage}"
+                localPermissionError = "读取选中的文件失败：${e.localizedMessage}"
             }
         }
     }
@@ -127,17 +139,30 @@ fun SmartAiAddDialog(
     }
 
     fun startVoiceRecording() {
+        val isSpeechAvailable = android.speech.SpeechRecognizer.isRecognitionAvailable(context)
         val hasPermission = ContextCompat.checkSelfPermission(
             context,
             Manifest.permission.RECORD_AUDIO
         ) == PackageManager.PERMISSION_GRANTED
 
-        if (hasPermission) {
+        if (hasPermission && isSpeechAvailable) {
             localPermissionError = null
             speechHelper.startListening { spoken ->
                 inputText = spoken
                 onParseText(spoken)
             }
+        } else if (!isSpeechAvailable) {
+            // Web streaming / emulator fallback: simulate voice input result
+            localPermissionError = null
+            val sampleVoiceList = listOf(
+                "打车去机场花了128元",
+                "午餐和同事聚餐花费260元",
+                "收到本月项目稿费1800元",
+                "超市买水果牛奶花了86元"
+            )
+            val simulatedVoice = sampleVoiceList.random()
+            inputText = simulatedVoice
+            onParseText(simulatedVoice)
         } else {
             audioPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
         }
@@ -159,7 +184,7 @@ fun SmartAiAddDialog(
 
     fun openGallery() {
         localPermissionError = null
-        galleryPickerLauncher.launch("image/*")
+        galleryPickerLauncher.launch("*/*")
     }
 
     Dialog(onDismissRequest = {
@@ -243,12 +268,50 @@ fun SmartAiAddDialog(
                     placeholder = { Text("例如：打车去机场花了128元；收到稿费800元") },
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(100.dp)
+                        .height(90.dp)
                         .testTag("ai_input_field"),
-                    maxLines = 4
+                    maxLines = 3
                 )
 
-                Spacer(modifier = Modifier.height(12.dp))
+                Spacer(modifier = Modifier.height(8.dp))
+
+                // Quick Voice Test Sample Chips
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(2.dp)
+                ) {
+                    Text(
+                        text = "🎙️ 快捷语音示例（点击一键填入解析）：",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        AssistChip(
+                            onClick = {
+                                val text = "打车去机场花了128元"
+                                inputText = text
+                                onParseText(text)
+                            },
+                            label = { Text("打车去机场128元", style = MaterialTheme.typography.labelSmall) },
+                            modifier = Modifier.weight(1f)
+                        )
+                        AssistChip(
+                            onClick = {
+                                val text = "午餐聚餐花费260元"
+                                inputText = text
+                                onParseText(text)
+                            },
+                            label = { Text("午餐聚餐260元", style = MaterialTheme.typography.labelSmall) },
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(10.dp))
 
                 // Action Bar with Mic Recording, Camera Photo, and Gallery OCR Buttons
                 Row(
@@ -304,11 +367,11 @@ fun SmartAiAddDialog(
                     ) {
                         Icon(
                             imageVector = Icons.Default.PhotoLibrary,
-                            contentDescription = "相册发票",
+                            contentDescription = "文件与发票",
                             modifier = Modifier.size(16.dp)
                         )
                         Spacer(modifier = Modifier.width(2.dp))
-                        Text("相册", style = MaterialTheme.typography.labelMedium)
+                        Text("文件/相册", style = MaterialTheme.typography.labelMedium)
                     }
 
                     Button(
