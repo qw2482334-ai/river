@@ -14,6 +14,7 @@ import com.example.ui.theme.ExpenseTrackerTheme
 
 class MainActivity : ComponentActivity() {
 
+    @android.annotation.SuppressLint("InvalidFragmentVersionForActivityResult")
     private val permissionsLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { _ ->

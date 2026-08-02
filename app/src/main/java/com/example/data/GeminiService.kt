@@ -84,7 +84,8 @@ data class OpenAiError(
 
 data class OpenAiModelItem(
     @Json(name = "id") val id: String? = null,
-    @Json(name = "name") val name: String? = null
+    @Json(name = "name") val name: String? = null,
+    @Json(name = "created") val created: Long? = null
 )
 
 data class OpenAiModelsResponse(
@@ -238,7 +239,7 @@ class GeminiService(private val aiConfigManager: AiConfigManager) {
                 val modelList = response.models?.mapNotNull { item ->
                     val rawName = item.name ?: return@mapNotNull null
                     rawName.removePrefix("models/")
-                } ?: emptyList()
+                }?.sortedDescending() ?: emptyList()
                 if (modelList.isNotEmpty()) {
                     Result.success(modelList)
                 } else {
@@ -256,7 +257,8 @@ class GeminiService(private val aiConfigManager: AiConfigManager) {
                 val authHeader = if (cleanKey.startsWith("Bearer ") || cleanKey.isBlank()) cleanKey else "Bearer $cleanKey"
                 val response = openAiApi.listOpenAiModels(modelsUrl, authHeader)
                 val items = response.data ?: response.models ?: emptyList()
-                val modelList = items.mapNotNull { it.id ?: it.name }.filter { it.isNotBlank() }
+                val sortedItems = items.sortedByDescending { it.created ?: 0L }
+                val modelList = sortedItems.mapNotNull { it.id ?: it.name }.filter { it.isNotBlank() }
                 if (modelList.isNotEmpty()) {
                     Result.success(modelList)
                 } else {
