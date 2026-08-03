@@ -26,7 +26,8 @@ import com.example.ui.components.*
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ExpenseTrackerApp(
-    viewModel: ExpenseViewModel = androidx.lifecycle.viewmodel.compose.viewModel()
+    viewModel: ExpenseViewModel = androidx.lifecycle.viewmodel.compose.viewModel(),
+    onLogout: () -> Unit = {}
 ) {
     val selectedLedger by viewModel.selectedLedger.collectAsStateWithLifecycle()
     val allExpenses by viewModel.allExpenses.collectAsStateWithLifecycle()
@@ -206,6 +207,16 @@ fun ExpenseTrackerApp(
                         )
                     }
 
+                    // Logout Button
+                    IconButton(
+                        onClick = { onLogout() }
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.ExitToApp,
+                            contentDescription = "退出登录",
+                            tint = MaterialTheme.colorScheme.error
+                        )
+                    }
                     // AI Engine & Network Settings
                     IconButton(
                         onClick = { showAiSettingsDialog = true }

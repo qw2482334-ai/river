@@ -10,8 +10,8 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface SavingsGoalDao {
-    @Query("SELECT * FROM savings_goals ORDER BY targetDateMillis ASC")
-    fun getAllGoals(): Flow<List<SavingsGoalEntity>>
+    @Query("SELECT * FROM savings_goals WHERE userId = :userId ORDER BY targetDateMillis ASC")
+    fun getAllGoals(userId: Long): Flow<List<SavingsGoalEntity>>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertGoal(goal: SavingsGoalEntity): Long

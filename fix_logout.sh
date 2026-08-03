@@ -1,0 +1,3 @@
+sed -i 's/fun ExpenseTrackerApp(viewModel: ExpenseViewModel)/fun ExpenseTrackerApp(viewModel: ExpenseViewModel, onLogout: () -> Unit = {})/' app/src/main/java/com/example/ui/ExpenseTrackerApp.kt
+
+sed -i '/\/\/ AI Engine & Network Settings/i \                    \/\/ Logout Button\n                    IconButton(\n                        onClick = { onLogout() }\n                    ) {\n                        Icon(\n                            imageVector = Icons.AutoMirrored.Filled.ExitToApp,\n                            contentDescription = "退出登录",\n                            tint = MaterialTheme.colorScheme.error\n                        )\n                    }' app/src/main/java/com/example/ui/ExpenseTrackerApp.kt

@@ -1,3 +1,4 @@
+cat << 'INNER_EOF' > app/src/main/java/com/example/MainActivity.kt
 package com.example
 
 import android.Manifest
@@ -43,7 +44,7 @@ class MainActivity : ComponentActivity() {
                         }
                     )
                 } else {
-                    ExpenseTrackerApp(viewModel = expenseViewModel, onLogout = { currentUserId = null })
+                    ExpenseTrackerApp(viewModel = expenseViewModel)
                 }
             }
         }
@@ -62,3 +63,4 @@ class MainActivity : ComponentActivity() {
         permissionsLauncher.launch(permissionsToRequest.toTypedArray())
     }
 }
+INNER_EOF

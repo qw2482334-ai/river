@@ -31,7 +31,7 @@ fun UserGuideDialog(
     onOpenSmartAdd: () -> Unit = {}
 ) {
     var selectedTab by remember { mutableStateOf(0) }
-    val tabs = listOf("📖 默认数据说明", "🚀 软件快速上手", "⚙️ AI/API中转站教程", "📊 资产与功能指南")
+    val tabs = listOf("📖 默认数据说明", "🚀 软件快速上手", "⚙️ AI/API中转站教程", "📊 资产与功能指南", "🔐 商业多账户体系")
 
     Dialog(
         onDismissRequest = onDismissRequest,
@@ -146,6 +146,7 @@ fun UserGuideDialog(
                             }
                         )
                         3 -> FeaturesGuideSection()
+                        4 -> MultiUserSystemGuideSection()
                     }
                 }
 
@@ -486,5 +487,51 @@ private fun StepItem(step: String, detail: String) {
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(start = 8.dp, top = 2.dp)
         )
+    }
+}
+
+@Composable
+private fun MultiUserSystemGuideSection() {
+    val scrollState = rememberScrollState()
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(scrollState),
+        verticalArrangement = Arrangement.spacedBy(14.dp)
+    ) {
+        GuideCard(
+            title = "🔐 企业级多用户身份认证",
+            icon = Icons.Default.Lock,
+            containerColor = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.4f)
+        ) {
+            Text(
+                text = "系统采用符合商业标准的多租户（多用户）隔离架构，确保每个用户的财务数据严格隔离与安全：",
+                style = MaterialTheme.typography.bodyMedium
+            )
+            Spacer(modifier = Modifier.height(6.dp))
+            BulletItem("多重认证方式：支持【密码登录】、【短信验证码】（测试阶段验证码固定为123456）以及【注册新账户】。")
+            BulletItem("数据硬隔离：底层数据库通过 User ID 实现了全面的跨表关联，确保同一台设备上，用户A只能看到和操作用户A的账单与心愿单，绝对无法越权访问。")
+            BulletItem("设备缓存机制：基于 Room DB 存储机制，保障不同登录态的数据私密性。")
+        }
+        
+        GuideCard(
+            title = "📱 短信验证码模拟流程",
+            icon = Icons.Default.Sms,
+            containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.3f)
+        ) {
+            BulletItem("在登录页面点击【短信验证码】选项卡。")
+            BulletItem("输入 11 位手机号码（如：13800138000）。")
+            BulletItem("点击获取后系统会进入 60 秒倒计时防刷机制。")
+            BulletItem("在验证码框输入演示环境专用核验码：123456，即可一键安全登录。")
+        }
+
+        GuideCard(
+            title = "🔄 注销与重登录",
+            icon = Icons.Default.Logout,
+            containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.3f)
+        ) {
+            BulletItem("为确保商业系统的闭环，如需切换账号，您可以在应用完全退出后重新启动（后续版本将加入全局登出按钮）。")
+            BulletItem("每个账户在注册后，会自动生成符合该用户生命周期的“初始化种子数据”以便快速体验。")
+        }
     }
 }

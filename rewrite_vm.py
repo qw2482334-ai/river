@@ -1,4 +1,6 @@
-package com.example.ui
+import os
+
+code = """package com.example.ui
 
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
@@ -6,15 +8,13 @@ import androidx.lifecycle.viewModelScope
 import com.example.data.*
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
-import com.example.ui.components.ChatMessage
-import com.example.data.AiConfigManager
 
 class ExpenseViewModel(application: Application) : AndroidViewModel(application) {
     private val db = AppDatabase.getDatabase(application)
     private val repository = ExpenseRepository(db.expenseDao(), db.savingsGoalDao(), db.investmentDao(), db.lotteryDao())
-    val aiConfigManager = AiConfigManager(application)
-    val geminiService = GeminiService(aiConfigManager)
+    private val geminiService = GeminiService()
     private val marketService = FinancialMarketService()
+    private val networkObserver = NetworkConnectivityObserver(application)
 
     private val _currentUserId = MutableStateFlow(0L)
     fun setUserId(id: Long) {
@@ -22,7 +22,7 @@ class ExpenseViewModel(application: Application) : AndroidViewModel(application)
         viewModelScope.launch { repository.seedInitialDataIfEmpty(id) }
     }
 
-    val isNetworkOnline = MutableStateFlow(true).asStateFlow()
+    val isNetworkOnline = networkObserver.isOnline.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), networkObserver.isCurrentlyOnline())
 
     private val _exchangeRates = MutableStateFlow<Map<String, Double>>(
         mapOf("CNY" to 1.0, "USD" to 0.138, "EUR" to 0.128, "JPY" to 21.2, "HKD" to 1.08, "GBP" to 0.109)
@@ -30,14 +30,7 @@ class ExpenseViewModel(application: Application) : AndroidViewModel(application)
     val exchangeRates = _exchangeRates.asStateFlow()
     val isLoadingRates = MutableStateFlow(false).asStateFlow()
     
-fun refreshExchangeRates() {
-        viewModelScope.launch {
-            _snackbarEvent.emit("💱 正在更新实时汇率...")
-            // Simulated update
-            _exchangeRates.value = mapOf("CNY" to 1.0, "USD" to 0.138, "EUR" to 0.128, "JPY" to 21.2, "HKD" to 1.08, "GBP" to 0.109, "KRW" to 190.5)
-            _snackbarEvent.emit("✅ 汇率已更新！")
-        }
-    }
+    fun refreshExchangeRates() {}
 
     private val _selectedLedger = MutableStateFlow("全部账本")
     val selectedLedger = _selectedLedger.asStateFlow()
@@ -100,31 +93,7 @@ fun refreshExchangeRates() {
     val monthlyReport = MutableStateFlow<String?>(null)
     val isReportLoading = MutableStateFlow(false)
 
-fun fetchOnlineInsight() {
-        viewModelScope.launch {
-            isGeneratingInsight.value = true
-            _snackbarEvent.emit("💡 正在联系 AI 生成理财诊断...")
-            val list = allExpenses.value
-            val totalIncome = list.filter { it.type == TransactionType.INCOME.name }.sumOf { it.amount }
-            val totalExpense = list.filter { it.type == TransactionType.EXPENSE.name }.sumOf { it.amount }
-            val summary = list.filter { it.type == TransactionType.EXPENSE.name }
-                .groupBy { it.category }
-                .mapValues { it.value.sumOf { e -> e.amount } }
-                .entries.joinToString { "${it.key}: ￥${it.value}" }
-            
-            val prompt = "请根据我本月财务情况进行理性消费度打分与优化诊断（收入:￥$totalIncome, 支出:￥$totalExpense, 分类: $summary）。请提供3条具体可落地的省钱与财富增长实操建议。"
-            geminiService.generateFinancialAdvice(prompt, totalIncome, totalExpense, summary, "全量交易样本")
-                .onSuccess { text ->
-                    onlineInsightText.value = text
-                    isGeneratingInsight.value = false
-                    _snackbarEvent.emit("✨ AI 深度理财诊断已完成！")
-                }
-                .onFailure {
-                    isGeneratingInsight.value = false
-                    _snackbarEvent.emit("⚠️ 诊断失败，请检查网络或配置")
-                }
-        }
-    }
+    fun fetchOnlineInsight() {}
 
     fun addInvestment(item: InvestmentItem) {
         viewModelScope.launch {
@@ -310,3 +279,8 @@ fun fetchOnlineInsight() {
         monthlyReport.value = null
     }
 }
+"""
+
+with open('app/src/main/java/com/example/ui/ExpenseViewModel.kt', 'w') as f:
+    f.write(code)
+

@@ -10,11 +10,11 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface ExpenseDao {
-    @Query("SELECT * FROM expenses ORDER BY dateMillis DESC")
-    fun getAllExpenses(): Flow<List<ExpenseEntity>>
+    @Query("SELECT * FROM expenses WHERE userId = :userId ORDER BY dateMillis DESC")
+    fun getAllExpenses(userId: Long): Flow<List<ExpenseEntity>>
 
-    @Query("SELECT * FROM expenses WHERE ledgerName = :ledgerName ORDER BY dateMillis DESC")
-    fun getExpensesByLedger(ledgerName: String): Flow<List<ExpenseEntity>>
+    @Query("SELECT * FROM expenses WHERE userId = :userId AND ledgerName = :ledgerName ORDER BY dateMillis DESC")
+    fun getExpensesByLedger(userId: Long, ledgerName: String): Flow<List<ExpenseEntity>>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertExpense(expense: ExpenseEntity): Long

@@ -1,3 +1,4 @@
+cat << 'INNER_EOF' > app/src/main/java/com/example/data/InvestmentModels.kt
 package com.example.data
 
 import androidx.room.Entity
@@ -53,3 +54,4 @@ enum class LotteryStatus(val label: String) {
     WON("已中奖"),
     LOST("未中奖")
 }
+INNER_EOF

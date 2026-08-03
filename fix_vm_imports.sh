@@ -1,0 +1,1 @@
+sed -i 's/import kotlinx.coroutines.launch/import kotlinx.coroutines.launch\nimport com.example.ui.components.ChatMessage\nimport com.example.data.AiConfigManager/' app/src/main/java/com/example/ui/ExpenseViewModel.kt

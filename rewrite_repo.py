@@ -1,4 +1,4 @@
-package com.example.data
+code = """package com.example.data
 
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
@@ -75,3 +75,7 @@ class ExpenseRepository(
         }
     }
 }
+"""
+
+with open('app/src/main/java/com/example/data/ExpenseRepository.kt', 'w') as f:
+    f.write(code)

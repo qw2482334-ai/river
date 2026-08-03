@@ -12,6 +12,7 @@ enum class TransactionType {
 data class ExpenseEntity(
     @PrimaryKey(autoGenerate = true)
     val id: Long = 0,
+    val userId: Long = 0,
     val title: String,
     val amount: Double,
     val type: String = TransactionType.EXPENSE.name,
