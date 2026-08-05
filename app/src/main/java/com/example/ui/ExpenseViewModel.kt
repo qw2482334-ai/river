@@ -6,12 +6,146 @@ import androidx.lifecycle.viewModelScope
 import com.example.data.*
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Dispatchers
 import com.example.ui.components.ChatMessage
 import com.example.data.AiConfigManager
+import java.util.Calendar
+import com.example.data.SecurityManager
 
 class ExpenseViewModel(application: Application) : AndroidViewModel(application) {
     private val db = AppDatabase.getDatabase(application)
-    private val repository = ExpenseRepository(db.expenseDao(), db.savingsGoalDao(), db.investmentDao(), db.lotteryDao())
+    private val repository = ExpenseRepository(db.expenseDao(), db.savingsGoalDao(), db.investmentDao(), db.lotteryDao(), db.subscriptionDao())
+    val securityManager = SecurityManager(application)
+
+    private val _subscriptions = MutableStateFlow<List<SubscriptionEntity>>(emptyList())
+    val subscriptions = _subscriptions.asStateFlow()
+
+    init {
+        viewModelScope.launch {
+            repository.getAllSubscriptions().collect { subs ->
+                _subscriptions.value = subs
+                checkDueSubscriptions(subs)
+            }
+        }
+    }
+
+    private suspend fun checkDueSubscriptions(subs: List<SubscriptionEntity>) {
+        val now = System.currentTimeMillis()
+        subs.forEach { sub ->
+            if (sub.nextBillingDate <= now) {
+                // Add expense
+                val exp = ExpenseEntity(
+                    userId = _currentUserId.value,
+                    title = "${sub.title} (周期扣费)",
+                    amount = sub.amount,
+                    type = sub.type,
+                    category = sub.category,
+                    dateMillis = now,
+                    note = "自动记账: ${sub.note}",
+                    ledgerName = sub.ledgerName
+                )
+                repository.insertExpense(exp)
+
+                // Update next billing date
+                val cal = Calendar.getInstance()
+                cal.timeInMillis = sub.nextBillingDate
+                if (sub.cycle == "MONTHLY") {
+                    cal.add(Calendar.MONTH, 1)
+                } else if (sub.cycle == "YEARLY") {
+                    cal.add(Calendar.YEAR, 1)
+                }
+                
+                // If it's still overdue, fast-forward to future
+                while (cal.timeInMillis <= now) {
+                    if (sub.cycle == "MONTHLY") cal.add(Calendar.MONTH, 1)
+                    else cal.add(Calendar.YEAR, 1)
+                }
+                
+                val nextDate = cal.timeInMillis
+                repository.updateSubscription(sub.copy(nextBillingDate = nextDate))
+                
+                _snackbarEvent.emit("🔄 周期账单已自动入账: ${sub.title}")
+            }
+        }
+    }
+
+    fun addSubscription(sub: SubscriptionEntity) {
+        viewModelScope.launch {
+            repository.insertSubscription(sub)
+            _snackbarEvent.emit("✅ 已添加周期账单")
+        }
+    }
+    
+    
+    private fun parseCsvLine(line: String): List<String> {
+        val result = mutableListOf<String>()
+        var current = StringBuilder()
+        var inQuotes = false
+        for (char in line) {
+            if (char == '"') {
+                inQuotes = !inQuotes
+            } else if (char == ',' && !inQuotes) {
+                result.add(current.toString())
+                current = StringBuilder()
+            } else {
+                current.append(char)
+            }
+        }
+        result.add(current.toString())
+        return result
+    }
+
+    fun importCsvData(csvData: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val lines = csvData.trim().split("\n")
+                if (lines.size <= 1) {
+                    _snackbarEvent.emit("❌ 导入失败: 格式错误或无有效数据")
+                    return@launch
+                }
+                
+                var importedCount = 0
+                for (i in 1 until lines.size) {
+                    val line = lines[i].trim()
+                    if (line.isBlank()) continue
+                    
+                    val columns = parseCsvLine(line)
+                    if (columns.size >= 8) {
+                        val title = columns[1]
+                        val amount = columns[2].toDoubleOrNull() ?: 0.0
+                        val type = columns[3]
+                        val category = columns[4]
+                        val ledgerName = columns[5]
+                        val dateMillis = columns[6].toLongOrNull() ?: System.currentTimeMillis()
+                        val note = columns[7]
+                        
+                        val expense = ExpenseEntity(
+                            userId = _currentUserId.value,
+                            title = title,
+                            amount = amount,
+                            type = type,
+                            category = category,
+                            ledgerName = ledgerName,
+                            dateMillis = dateMillis,
+                            note = note
+                        )
+                        repository.insertExpense(expense)
+                        importedCount++
+                    }
+                }
+                _snackbarEvent.emit("✅ 成功导入 $importedCount 条账单记录")
+            } catch (e: Exception) {
+                _snackbarEvent.emit("❌ 导入失败: ${e.message}")
+            }
+        }
+    }
+
+    fun deleteSubscription(sub: SubscriptionEntity) {
+        viewModelScope.launch {
+            repository.deleteSubscription(sub)
+        }
+    }
+
     val aiConfigManager = AiConfigManager(application)
     val geminiService = GeminiService(aiConfigManager)
     private val marketService = FinancialMarketService()
@@ -31,11 +165,44 @@ class ExpenseViewModel(application: Application) : AndroidViewModel(application)
     val isLoadingRates = MutableStateFlow(false).asStateFlow()
     
 fun refreshExchangeRates() {
-        viewModelScope.launch {
-            _snackbarEvent.emit("💱 正在更新实时汇率...")
-            // Simulated update
-            _exchangeRates.value = mapOf("CNY" to 1.0, "USD" to 0.138, "EUR" to 0.128, "JPY" to 21.2, "HKD" to 1.08, "GBP" to 0.109, "KRW" to 190.5)
-            _snackbarEvent.emit("✅ 汇率已更新！")
+        viewModelScope.launch(Dispatchers.IO) {
+            _snackbarEvent.emit("💱 正在联网更新实时汇率...")
+            try {
+                val url = java.net.URL("https://api.exchangerate-api.com/v4/latest/CNY")
+                val connection = url.openConnection() as java.net.HttpURLConnection
+                connection.requestMethod = "GET"
+                connection.connectTimeout = 5000
+                connection.readTimeout = 5000
+                val inputStream = connection.inputStream
+                val response = inputStream.bufferedReader().use { it.readText() }
+                
+                val ratesPattern = java.util.regex.Pattern.compile("\"rates\":\\{(.*?)\\}")
+                val matcher = ratesPattern.matcher(response)
+                if (matcher.find()) {
+                    val ratesStr = matcher.group(1) ?: ""
+                    val pairs = ratesStr.split(",")
+                    val newRates = mutableMapOf<String, Double>()
+                    for (pair in pairs) {
+                        val kv = pair.split(":")
+                        if (kv.size == 2) {
+                            val key = kv[0].replace("\"", "").trim()
+                            val value = kv[1].toDoubleOrNull() ?: continue
+                            newRates[key] = value
+                        }
+                    }
+                    if (newRates.isNotEmpty()) {
+                        _exchangeRates.value = newRates
+                        _snackbarEvent.emit("✅ 联网汇率已更新！(基准: CNY)")
+                    } else {
+                        throw Exception("解析汇率失败")
+                    }
+                } else {
+                    throw Exception("接口返回格式异常")
+                }
+            } catch (e: Exception) {
+                _exchangeRates.value = mapOf("CNY" to 1.0, "USD" to 0.138, "EUR" to 0.128, "JPY" to 21.2, "HKD" to 1.08, "GBP" to 0.109, "KRW" to 190.5)
+                _snackbarEvent.emit("❌ 联网失败: ${e.message}，已加载离线参考汇率")
+            }
         }
     }
 

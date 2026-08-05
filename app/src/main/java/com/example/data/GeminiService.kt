@@ -21,7 +21,8 @@ import java.util.regex.Pattern
 data class GenerateContentRequest(
     @Json(name = "contents") val contents: List<Content>,
     @Json(name = "generationConfig") val generationConfig: GenerationConfig? = null,
-    @Json(name = "systemInstruction") val systemInstruction: Content? = null
+    @Json(name = "systemInstruction") val systemInstruction: Content? = null,
+    @Json(name = "tools") val tools: List<Map<String, Map<String, Any>>>? = null
 )
 
 data class Content(
@@ -173,8 +174,7 @@ class GeminiService(private val aiConfigManager: AiConfigManager) {
         val cleanBase = baseUrl.trim().removeSuffix("/")
         return when {
             cleanBase.endsWith("/chat/completions") -> cleanBase
-            cleanBase.endsWith("/chat/completions/") -> cleanBase.removeSuffix("/")
-            cleanBase.endsWith("/v1") || cleanBase.endsWith("/v1beta") -> "$cleanBase/chat/completions"
+            cleanBase.matches(Regex(".*(?:/v\\d+[a-zA-Z0-9-]*)$")) -> "$cleanBase/chat/completions"
             cleanBase.endsWith("/chat") -> "$cleanBase/completions"
             else -> "$cleanBase/v1/chat/completions"
         }
@@ -248,10 +248,8 @@ class GeminiService(private val aiConfigManager: AiConfigManager) {
             } else {
                 val modelsUrl = when {
                     cleanBase.endsWith("/models") -> cleanBase
-                    cleanBase.endsWith("/v1") -> "$cleanBase/models"
-                    cleanBase.endsWith("/v1/") -> "${cleanBase}models"
                     cleanBase.endsWith("/chat/completions") -> cleanBase.removeSuffix("/chat/completions") + "/models"
-                    cleanBase.endsWith("/") -> "${cleanBase}v1/models"
+                    cleanBase.matches(Regex(".*(?:/v\\d+[a-zA-Z0-9-]*)$")) -> "$cleanBase/models"
                     else -> "$cleanBase/v1/models"
                 }
                 val authHeader = if (cleanKey.startsWith("Bearer ") || cleanKey.isBlank()) cleanKey else "Bearer $cleanKey"
@@ -367,7 +365,8 @@ class GeminiService(private val aiConfigManager: AiConfigManager) {
                 val fullUrl = getCleanGeminiUrl(config.baseUrl, config.modelName)
                 val request = GenerateContentRequest(
                     contents = listOf(Content(parts = listOf(Part(text = userQuestion)))),
-                    systemInstruction = Content(parts = listOf(Part(text = systemContext)))
+                    systemInstruction = Content(parts = listOf(Part(text = systemContext))),
+                    tools = listOf(mapOf("googleSearch" to emptyMap<String, Any>()))
                 )
                 val response = geminiApi.generateContent(fullUrl, apiKey, request)
                 response.candidates?.firstOrNull()?.content?.parts?.firstOrNull()?.text ?: "暂无回复"

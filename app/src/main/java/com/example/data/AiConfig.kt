@@ -190,19 +190,59 @@ class AiConfigManager(context: Context? = null) {
                 saveModelName("deepseek-ai/DeepSeek-V3")
                 saveProtocolType("OPENAI")
             }
-            "QWEN" -> {
-                saveBaseUrl("https://dashscope.aliyuncs.com/compatible-mode/v1/")
-                saveModelName("qwen-turbo")
-                saveProtocolType("OPENAI")
-            }
             "KIMI" -> {
                 saveBaseUrl("https://api.moonshot.cn/v1/")
                 saveModelName("moonshot-v1-8k")
                 saveProtocolType("OPENAI")
             }
+            "T8STAR" -> {
+                saveBaseUrl("https://ai.t8star.org/v1/")
+                saveModelName("gpt-3.5-turbo")
+                saveProtocolType("OPENAI")
+            }
+            "AIBH" -> {
+                saveBaseUrl("https://api.aibh.site/v1/")
+                saveModelName("gpt-3.5-turbo")
+                saveProtocolType("OPENAI")
+            }
+            "MOJIE" -> {
+                saveBaseUrl("https://api.mojieai.top/v1/")
+                saveModelName("gpt-3.5-turbo")
+                saveProtocolType("OPENAI")
+            }
+            "IMAGELFK" -> {
+                saveBaseUrl("https://imagelfk.cc.cd/v1/")
+                saveModelName("gpt-3.5-turbo")
+                saveProtocolType("OPENAI")
+            }
+            "VOLCENGINE" -> {
+                saveBaseUrl("https://ark.cn-beijing.volces.com/api/v3/")
+                saveModelName("doubao-lite-4k-240328")
+                saveProtocolType("OPENAI")
+            }
+            "OPENROUTER" -> {
+                saveBaseUrl("https://openrouter.ai/api/v1/")
+                saveModelName("google/gemini-2.5-flash")
+                saveProtocolType("OPENAI")
+            }
+            "MINIMAX" -> {
+                saveBaseUrl("https://api.minimaxi.com/v1/")
+                saveModelName("MiniMax-Text-01")
+                saveProtocolType("OPENAI")
+            }
+            "ZHIPU" -> {
+                saveBaseUrl("https://open.bigmodel.cn/api/paas/v4/")
+                saveModelName("glm-4")
+                saveProtocolType("OPENAI")
+            }
+            "QWEN" -> {
+                saveBaseUrl("https://dashscope.aliyuncs.com/compatible-mode/v1/")
+                saveModelName("qwen-turbo")
+                saveProtocolType("OPENAI")
+            }
             "NVIDIA" -> {
                 saveBaseUrl("https://integrate.api.nvidia.com/v1/")
-                saveModelName("meta/llama-3.1-405b-instruct")
+                saveModelName("meta/llama-3.1-70b-instruct")
                 saveProtocolType("OPENAI")
             }
             "APIMART_1" -> {

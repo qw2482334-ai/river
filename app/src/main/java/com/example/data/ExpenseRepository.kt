@@ -1,13 +1,12 @@
 package com.example.data
-
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
-
 class ExpenseRepository(
     private val expenseDao: ExpenseDao,
     private val savingsGoalDao: SavingsGoalDao,
     private val investmentDao: InvestmentDao,
-    private val lotteryDao: LotteryDao
+    private val lotteryDao: LotteryDao,
+    private val subscriptionDao: SubscriptionDao
 ) {
     fun getAllExpenses(userId: Long): Flow<List<ExpenseEntity>> = expenseDao.getAllExpenses(userId)
     fun getAllGoals(userId: Long): Flow<List<SavingsGoalEntity>> = savingsGoalDao.getAllGoals(userId)
@@ -38,16 +37,21 @@ class ExpenseRepository(
     suspend fun deleteGoalById(id: Long) {
         savingsGoalDao.deleteGoalById(id)
     }
-
     fun getInvestments(userId: Long): Flow<List<InvestmentItem>> = investmentDao.getInvestments(userId)
     suspend fun insertInvestment(item: InvestmentItem) = investmentDao.insertInvestment(item)
     suspend fun updateInvestment(item: InvestmentItem) = investmentDao.updateInvestment(item)
     suspend fun deleteInvestment(id: String, userId: Long) = investmentDao.deleteInvestment(id, userId)
-
     fun getLotteries(userId: Long): Flow<List<LotteryRecord>> = lotteryDao.getLotteries(userId)
     suspend fun insertLottery(item: LotteryRecord) = lotteryDao.insertLottery(item)
     suspend fun updateLottery(item: LotteryRecord) = lotteryDao.updateLottery(item)
     suspend fun deleteLottery(id: String, userId: Long) = lotteryDao.deleteLottery(id, userId)
+    
+    // Subscriptions
+    fun getAllSubscriptions() = subscriptionDao.getAllSubscriptions()
+    suspend fun getDueSubscriptions(currentDate: Long) = subscriptionDao.getDueSubscriptions(currentDate)
+    suspend fun insertSubscription(sub: SubscriptionEntity) = subscriptionDao.insertSubscription(sub)
+    suspend fun updateSubscription(sub: SubscriptionEntity) = subscriptionDao.updateSubscription(sub)
+    suspend fun deleteSubscription(sub: SubscriptionEntity) = subscriptionDao.deleteSubscription(sub)
 
     suspend fun seedInitialDataIfEmpty(userId: Long) {
         val existingExpenses = getAllExpenses(userId).first()

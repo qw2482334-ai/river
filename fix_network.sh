@@ -1,2 +1,0 @@
-sed -i '/private val networkObserver = NetworkConnectivityObserver(application)/d' app/src/main/java/com/example/ui/ExpenseViewModel.kt
-sed -i 's/val isNetworkOnline = networkObserver.isOnline.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), networkObserver.isCurrentlyOnline())/val isNetworkOnline = MutableStateFlow(true).asStateFlow()/' app/src/main/java/com/example/ui/ExpenseViewModel.kt

@@ -8,6 +8,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.filled.Repeat
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -42,6 +43,7 @@ fun ExpenseTrackerApp(
     val onlineInsightText by viewModel.onlineInsightText.collectAsStateWithLifecycle()
     val isGeneratingInsight by viewModel.isGeneratingInsight.collectAsStateWithLifecycle()
     val investments by viewModel.investments.collectAsStateWithLifecycle()
+    val subscriptions by viewModel.subscriptions.collectAsStateWithLifecycle()
     val isLoadingMarket by viewModel.isLoadingMarket.collectAsStateWithLifecycle()
     val lotteryRecords by viewModel.lotteryRecords.collectAsStateWithLifecycle()
     val isCheckingLottery by viewModel.isCheckingLottery.collectAsStateWithLifecycle()
@@ -57,6 +59,21 @@ fun ExpenseTrackerApp(
 
     val monthlyReport by viewModel.monthlyReport.collectAsStateWithLifecycle()
     val isReportLoading by viewModel.isReportLoading.collectAsStateWithLifecycle()
+
+val isPinEnabled = remember { viewModel.securityManager.isPinEnabled() }
+    var isUnlocked by remember { mutableStateOf(!isPinEnabled) }
+
+    if (!isUnlocked) {
+        SecurityLockScreen(
+            isSetupMode = false,
+            onUnlockAttempt = { pin -> 
+                val success = viewModel.securityManager.verifyPin(pin)
+                if (success) isUnlocked = true
+                success
+            }
+        )
+        return
+    }
 
     val snackbarHostState = remember { SnackbarHostState() }
 
@@ -79,6 +96,8 @@ fun ExpenseTrackerApp(
     var showUserGuideDialog by remember { mutableStateOf(false) }
     var showInvestmentAnalytics by remember { mutableStateOf(false) }
     var showLotteryAnalytics by remember { mutableStateOf(false) }
+    var showSubscriptionList by remember { mutableStateOf(false) }
+    var showAddSubscription by remember { mutableStateOf(false) }
     var showFinancialHealthDialog by remember { mutableStateOf(false) }
     var showInvestmentCalculator by remember { mutableStateOf(false) }
 
@@ -713,6 +732,7 @@ fun ExpenseTrackerApp(
     if (showExportSheet) {
         ExportDataBottomSheet(
             expenses = allExpenses,
+            onImportCsv = { viewModel.importCsvData(it) },
             onDismiss = { showExportSheet = false }
         )
     }
@@ -942,6 +962,7 @@ fun ExpenseTrackerApp(
     // 8. AI Engine & Network Settings Dialog
     if (showAiSettingsDialog) {
         AiSettingsDialog(
+            securityManager = viewModel.securityManager,
             aiConfigManager = viewModel.aiConfigManager,
             geminiService = viewModel.geminiService,
             onDismiss = { showAiSettingsDialog = false }
@@ -949,6 +970,25 @@ fun ExpenseTrackerApp(
     }
 
     // 9. User Guide & Software Operation Manual Dialog
+
+    if (showSubscriptionList) {
+        SubscriptionListDialog(
+            subscriptions = subscriptions,
+            onAddClick = { showAddSubscription = true },
+            onDeleteClick = { viewModel.deleteSubscription(it) },
+            onDismiss = { showSubscriptionList = false }
+        )
+    }
+    if (showAddSubscription) {
+        AddSubscriptionDialog(
+            onDismiss = { showAddSubscription = false },
+            onSave = { 
+                viewModel.addSubscription(it)
+                showAddSubscription = false 
+            }
+        )
+    }
+
     if (showUserGuideDialog) {
         UserGuideDialog(
             onDismissRequest = { showUserGuideDialog = false },

@@ -19,6 +19,7 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import com.example.data.SecurityManager
 import com.example.data.AiConfigManager
 import com.example.data.CustomApiProfile
 import com.example.data.GeminiService
@@ -27,6 +28,7 @@ import kotlinx.coroutines.launch
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AiSettingsDialog(
+    securityManager: SecurityManager,
     aiConfigManager: AiConfigManager,
     geminiService: GeminiService,
     onDismiss: () -> Unit
@@ -101,19 +103,59 @@ fun AiSettingsDialog(
                 modelName = "deepseek-ai/DeepSeek-V3"
                 protocolType = "OPENAI"
             }
-            "QWEN" -> {
-                baseUrl = "https://dashscope.aliyuncs.com/compatible-mode/v1/"
-                modelName = "qwen-turbo"
-                protocolType = "OPENAI"
-            }
             "KIMI" -> {
                 baseUrl = "https://api.moonshot.cn/v1/"
                 modelName = "moonshot-v1-8k"
                 protocolType = "OPENAI"
             }
+            "T8STAR" -> {
+                baseUrl = "https://ai.t8star.org/v1/"
+                modelName = "gpt-3.5-turbo"
+                protocolType = "OPENAI"
+            }
+            "AIBH" -> {
+                baseUrl = "https://api.aibh.site/v1/"
+                modelName = "gpt-3.5-turbo"
+                protocolType = "OPENAI"
+            }
+            "MOJIE" -> {
+                baseUrl = "https://api.mojieai.top/v1/"
+                modelName = "gpt-3.5-turbo"
+                protocolType = "OPENAI"
+            }
+            "IMAGELFK" -> {
+                baseUrl = "https://imagelfk.cc.cd/v1/"
+                modelName = "gpt-3.5-turbo"
+                protocolType = "OPENAI"
+            }
+            "VOLCENGINE" -> {
+                baseUrl = "https://ark.cn-beijing.volces.com/api/v3/"
+                modelName = "doubao-lite-4k-240328"
+                protocolType = "OPENAI"
+            }
+            "OPENROUTER" -> {
+                baseUrl = "https://openrouter.ai/api/v1/"
+                modelName = "google/gemini-2.5-flash"
+                protocolType = "OPENAI"
+            }
+            "MINIMAX" -> {
+                baseUrl = "https://api.minimaxi.com/v1/"
+                modelName = "MiniMax-Text-01"
+                protocolType = "OPENAI"
+            }
+            "ZHIPU" -> {
+                baseUrl = "https://open.bigmodel.cn/api/paas/v4/"
+                modelName = "glm-4"
+                protocolType = "OPENAI"
+            }
+            "QWEN" -> {
+                baseUrl = "https://dashscope.aliyuncs.com/compatible-mode/v1/"
+                modelName = "qwen-turbo"
+                protocolType = "OPENAI"
+            }
             "NVIDIA" -> {
                 baseUrl = "https://integrate.api.nvidia.com/v1/"
-                modelName = "meta/llama-3.1-405b-instruct"
+                modelName = "meta/llama-3.1-70b-instruct"
                 protocolType = "OPENAI"
             }
             "APIMART_1" -> {
@@ -241,14 +283,22 @@ fun AiSettingsDialog(
                     val presets = listOf(
                         Triple("GEMINI", "Google Gemini 官方 (推荐)", "gemini-1.5-flash"),
                         Triple("DEEPSEEK", "DeepSeek 官方 API", "deepseek-chat"),
-                        Triple("SILICONFLOW", "硅基流动 SiliconFlow", "DeepSeek-V3"),
+                        Triple("SILICONFLOW", "硅基流动 SiliconFlow (连通)", "deepseek-ai/DeepSeek-V3"),
+                        Triple("KIMI", "Moonshot / Kimi 智能体 (连通)", "moonshot-v1-8k"),
+                        Triple("T8STAR", "贞贞工坊 t8star (连通)", "gpt-3.5-turbo"),
+                        Triple("AIBH", "空氧 aibh (连通)", "gpt-3.5-turbo"),
+                        Triple("MOJIE", "魔戒 mojie (连通)", "gpt-3.5-turbo"),
+                        Triple("IMAGELFK", "灵法库 imagelfk", "gpt-3.5-turbo"),
+                        Triple("VOLCENGINE", "火山引擎 Volcengine", "doubao-lite-4k-240328"),
+                        Triple("OPENROUTER", "OpenRouter中转", "google/gemini-2.5-flash"),
+                        Triple("MINIMAX", "MiniMax 海螺", "MiniMax-Text-01"),
+                        Triple("ZHIPU", "智谱清言 Zhipu", "glm-4"),
                         Triple("QWEN", "阿里通义千问 Qwen", "qwen-turbo"),
-                        Triple("KIMI", "Moonshot / Kimi 智能体", "moonshot-v1-8k"),
-                        Triple("NVIDIA", "英伟达 NVIDIA NIM API", "meta/llama-3.1-405b-instruct"),
-                        Triple("APIMART_1", "Apimart 中转 1 (api.apimart.ai)", "gpt-4o / deepseek"),
-                        Triple("APIMART_2", "Apimart 中转 2 (api.apib.ai)", "gpt-4o / deepseek"),
-                        Triple("APIMART_3", "Apimart 中转 3 (api.aiuxu.com)", "gpt-4o / deepseek"),
-                        Triple("APIMART_4", "Apimart 中转 4 (api.aishuch.com)", "gpt-4o / deepseek"),
+                        Triple("NVIDIA", "英伟达 NVIDIA NIM API", "meta/llama-3.1-70b-instruct"),
+                        Triple("APIMART_1", "Apimart 中转 (连通)", "gpt-4o"),
+                        Triple("APIMART_2", "Apimart 节点2", "gpt-4o"),
+                        Triple("APIMART_3", "Apimart 节点3", "gpt-4o"),
+                        Triple("APIMART_4", "Apimart 节点4", "gpt-4o"),
                         Triple("CUSTOM", "自定义 OpenAI 中转站", "自动拉取可用模型")
                     )
 

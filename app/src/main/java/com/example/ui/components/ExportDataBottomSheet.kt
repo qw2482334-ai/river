@@ -23,6 +23,7 @@ import com.example.data.ExpenseEntity
 @Composable
 fun ExportDataBottomSheet(
     expenses: List<ExpenseEntity>,
+    onImportCsv: (String) -> Unit = {},
     onDismiss: () -> Unit
 ) {
     val context = LocalContext.current
@@ -101,7 +102,7 @@ fun ExportDataBottomSheet(
                 .testTag("export_data_bottom_sheet")
         ) {
             Text(
-                text = "导出账单与数据备份",
+                text = "导入与导出账单数据",
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold
             )
